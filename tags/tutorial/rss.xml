@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<channel>
+    <title>My new BSSG site - Posts tagged with: tutorial</title>
+    <link>http://localhost:8000/tags/tutorial/</link>
+    <description>Posts tagged with: tutorial</description>
+    <language>en</language>
+    <lastBuildDate>Fri, 21 Nov 2025 22:15:42 +0100</lastBuildDate>
+    <atom:link href="http://localhost:8000/tags/tutorial/rss.xml" rel="self" type="application/rss+xml" />
+    <item>
+        <title>BSSG Features and Examples</title>
+        <link>http://localhost:8000/2025/04/01/bssg-features-examples/</link>
+        <guid isPermaLink="true">http://localhost:8000/2025/04/01/bssg-features-examples/</guid>
+        <pubDate>Tue, 01 Apr 2025 09:30:00 +0200</pubDate>
+        <atom:updated>2025-04-01T09:30:00+02:00</atom:updated>
+        <description><![CDATA[<figure><img src="https://picsum.photos/537/354" alt="BSSG Features and Examples" title="Sample, random pic from picsum"><figcaption>Sample, random pic from picsum</figcaption></figure>A detailed overview of BSSG's key features with practical examples showing how to get the most out of this Bash Static Site Generator.]]></description>
+        <dc:creator>Anonymous (anonymous@example.com)</dc:creator>
+    </item>
+</channel>
+</rss>
