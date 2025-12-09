@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+cp site-lib/html/file-tree-content.html site-lib/html/file-tree-content.sv
+sed -i 's/<div class="tree-item-self is-clickable mod-collapsible nav-folder-title" data-path="Werkstatt".*zzzzzz<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div><\/div><\/div>//' site-lib/html/file-tree-content.html

@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+cp site-lib/html/file-tree-content.sv site-lib/html/file-tree-content.html
