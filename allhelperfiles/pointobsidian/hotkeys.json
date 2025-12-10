@@ -1,0 +1,223 @@
+{
+  "shortcuts-extender:heading-1": [],
+  "shortcuts-extender:heading-2": [],
+  "shortcuts-extender:heading-5": [],
+  "shortcuts-extender:heading-6": [],
+  "shortcuts-extender:heading-3": [],
+  "shortcuts-extender:heading-4": [],
+  "shortcuts-extender:shortcut-python-code": [],
+  "shortcuts-extender:shortcut-exclamation-mark": [],
+  "shortcuts-extender:shortcut-left-square-bracket": [],
+  "shortcuts-extender:shortcut-right-square-bracket": [],
+  "shortcuts-extender:shortcut-left-curly-bracket": [],
+  "shortcuts-extender:shortcut-right-curly-bracket": [],
+  "shortcuts-extender:shortcut-At": [],
+  "shortcuts-extender:shortcut-ampersand": [],
+  "shortcuts-extender:shortcut-percent": [],
+  "shortcuts-extender:shortcut-hash": [],
+  "shortcuts-extender:shortcut-circumflex": [],
+  "shortcuts-extender:shortcut-greater-than": [],
+  "shortcuts-extender:shortcut-less-than": [],
+  "shortcuts-extender:shortcut-Vertical-Line": [],
+  "shortcuts-extender:shortcut-dollar": [],
+  "shortcuts-extender:shortcut-code": [
+    {
+      "modifiers": [],
+      "key": "F12"
+    }
+  ],
+  "shortcuts-extender:shortcut-list-items": [],
+  "shortcuts-extender:shortcut-code-block": [
+    {
+      "modifiers": [
+        "Alt"
+      ],
+      "key": "F12"
+    }
+  ],
+  "app:toggle-left-sidebar": [
+    {
+      "modifiers": [
+        "Alt"
+      ],
+      "key": "ArrowLeft"
+    }
+  ],
+  "app:toggle-right-sidebar": [
+    {
+      "modifiers": [
+        "Alt"
+      ],
+      "key": "ArrowRight"
+    }
+  ],
+  "file-explorer:open": [
+    {
+      "modifiers": [
+        "Mod"
+      ],
+      "key": "`"
+    }
+  ],
+  "file-explorer:reveal-active-file": [
+    {
+      "modifiers": [
+        "Mod",
+        "Shift"
+      ],
+      "key": "`"
+    }
+  ],
+  "editor:fold-all": [
+    {
+      "modifiers": [
+        "Mod",
+        "Shift"
+      ],
+      "key": "Enter"
+    }
+  ],
+  "editor:unfold-all": [
+    {
+      "modifiers": [
+        "Alt",
+        "Shift"
+      ],
+      "key": "Enter"
+    }
+  ],
+  "insert-current-date": [
+    {
+      "modifiers": [
+        "Mod"
+      ],
+      "key": "R"
+    }
+  ],
+  "tag-pane:open": [
+    {
+      "modifiers": [
+        "Alt"
+      ],
+      "key": "/"
+    }
+  ],
+  "zen:toggle": [
+    {
+      "modifiers": [
+        "Shift"
+      ],
+      "key": "F4"
+    }
+  ],
+  "obsidian-fullscreen-plugin:fullscreen-focus": [
+    {
+      "modifiers": [
+        "Shift"
+      ],
+      "key": "F11"
+    }
+  ],
+  "obsidian-mind-map:app:markmap-preview": [
+    {
+      "modifiers": [],
+      "key": "F4"
+    }
+  ],
+  "obsidian-mindmap-nextgen:mindmapnextgen:pinned": [
+    {
+      "modifiers": [
+        "Mod"
+      ],
+      "key": "M"
+    }
+  ],
+  "obsidian-mindmap-nextgen:mindmapnextgen:unpinned": [
+    {
+      "modifiers": [
+        "Alt"
+      ],
+      "key": "M"
+    }
+  ],
+  "editor:focus-top": [
+    {
+      "modifiers": [
+        "Alt",
+        "Shift"
+      ],
+      "key": "ArrowUp"
+    }
+  ],
+  "editor:focus-bottom": [
+    {
+      "modifiers": [
+        "Alt",
+        "Shift"
+      ],
+      "key": "ArrowDown"
+    }
+  ],
+  "editor:focus-left": [
+    {
+      "modifiers": [
+        "Alt",
+        "Shift"
+      ],
+      "key": "ArrowLeft"
+    }
+  ],
+  "editor:focus-right": [
+    {
+      "modifiers": [
+        "Alt",
+        "Shift"
+      ],
+      "key": "ArrowRight"
+    }
+  ],
+  "insert-current-time": [
+    {
+      "modifiers": [
+        "Mod",
+        "Shift"
+      ],
+      "key": "R"
+    }
+  ],
+  "shortcuts-extender:heading-0": [],
+  "editor:fold-more": [
+    {
+      "modifiers": [
+        "Mod",
+        "Meta"
+      ],
+      "key": "Enter"
+    }
+  ],
+  "editor:fold-less": [
+    {
+      "modifiers": [
+        "Alt",
+        "Meta"
+      ],
+      "key": "Enter"
+    }
+  ],
+  "app:go-forward": [
+    {
+      "modifiers": [
+        "Alt"
+      ],
+      "key": "ArrowDown"
+    }
+  ],
+  "app:go-back": [
+    {
+      "modifiers": [
+        "Alt"
+      ],
+      "key": "ArrowUp"
+    }
+  ]
+}

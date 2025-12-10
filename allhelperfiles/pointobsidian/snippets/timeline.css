@@ -1,6 +1,7 @@
 /*
 author: FireIsGood
 source: https://discord.com/channels/686053708261228577/702656734631821413/1156868388249935883
+Angepasst 
 */
 
 /* Timeline Callout settings */
@@ -40,15 +41,16 @@ body {
   --dot-offset: calc(
     var(--timeline-dot-offset-y) + var(--timeline-card-padding-y)
   );
+}
 
-  .callout-title-inner {
+[data-callout="timeline"] .callout-title-inner {
     width: 80%;
     text-align: right;
     color: var(--timeline-title-color);
     font-size: var(--timeline-title-size);
     margin-top: var(--dot-offset);
-  }
-  .callout-icon {
+}
+[data-callout="timeline"] .callout-icon {
     order: 2;
     margin-inline: var(--timeline-line-margin);
     border-left: var(--timeline-line-width) var(--timeline-line-style) var(--timeline-line-color);
@@ -69,12 +71,12 @@ body {
       top: var(--dot-offset);
       left: var(--timeline-dot-offset-x);
     }
-  }
-  .svg-icon {
+}
+[data-callout="timeline"] .callout-title .svg-icon {
     display: none;
-  }
+}
 
-  .callout-content {
+[data-callout="timeline"] .callout-content {
     order: 3;
     --p-spacing: 0.5rem;
     background-color: var(--timeline-card-background-color);
@@ -85,7 +87,6 @@ body {
     & > h2:first-child {
       margin-top: 0;
     }
-  }
 }
 
 /* Stacking multiple timelines */

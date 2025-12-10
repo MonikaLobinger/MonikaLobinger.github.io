@@ -1,0 +1,85 @@
+.theme-light {
+  --color-fg:#50af83;
+  --color-hv:#50df83;
+  --color-fg-light-a: rgba(80,175,131,0.9);
+  --color-fg-light-b: rgba(80,175,131,0.8);
+  --color-strong:#30694e;
+  --color-mild:#bac22f;
+  --background-primary: #fff;
+  --background-primary-alt: #dedede;
+  --background-secondary: #dedede;
+  --background-secondary: #eeeeee !important;
+  --background-secondary-alt: #dedede;
+  --background-secondary-alt: #eeeeee !important;
+  --background-modifier-border: #f7f7f7;
+  --background-modifier-box-shadow: rgba(0, 0, 0, 0.85);
+  --text-accent: #df4a16;
+  --text-accent: var(--color-fg) !important;
+  --text-accent-hover: #df7a16;
+  --text-accent-hover: var(--color-hv) !important;
+  --text-normal: #03050b;
+  --text-muted: #555;
+  --text-error: #ff3333;
+  --text-error-hover: #990000;
+  --text-matched: #dcddde;
+  --text-on-accent: #dcddde;
+  --text-selection: rgba(223, 74, 22, 0.8);
+  --text-selection: var(--color-fg-light-b) !important;
+  --text-highlight-bg: #df4a16;
+  --text-highlight-bg: var(--color-fg) !important;
+  --interactive-accent: #df4a16;
+  --interactive-accent: var(--color-fg) !important;
+  --interactive-accent-rgb: #df7a16;
+  --interactive-accent-rgb: var(--color-hv) !important;
+  --interactive-accent-hover: #df7a16;
+  --interactive-accent-hover: var(--color-hv) !important;
+  --workspace-leaf-resize: #c1c1c1;
+  --accent-strong: #ec0d0d;
+  --accent-strong: var(--color-strong) !important;
+  --accent-mild: #e6b64f;
+  --accent-mild: var(--color-mild) !important;
+  --bw: #03050b;
+  --lines-identation: #dad8d8;
+  --tooltip-bg: rgba(223, 74, 22, 0.9);
+  --tooltip-bg: var(--color-fg-light-a);
+  --link-color: var(--color-fg);
+  --link-color-hover: var(--color-hv);
+  --link-external-color: var(--color-fg);
+  --link-external-color-hover: var(--color-hv);
+  --link-decoration: none;
+  --link-decoration-hover: none;
+}
+/* Damit das Plugin "Webpage HTML Export" den Dateinamen nicht als H1 anzeigt */
+.page-title, .mod-header {
+  display:none;
+}
+.theme-light code {
+  color: var(--color-fg) !important;
+}
+.theme-light .tag {
+  background: var(--color-fg);
+}
+
+.theme-light [data-callout="timeline"] {
+  background-color: white !important;
+}
+.theme-light [data-callout-metadata=blue] .callout-content {
+  background-color: rgba(214, 233, 255, .3) !important
+}
+
+.theme-light [data-callout-metadata=green] .callout-content {
+  background-color: rgba(0, 255, 0, .03) !important
+}
+
+.theme-light [data-callout-metadata=red] .callout-content {
+  background-color: rgba(255, 0, 0, .04) !important
+}
+
+.theme-light [data-callout-metadata=yellow] .callout-content {
+  background-color: rgba(255, 255, 0, .05) !important
+}
+
+.theme-light [data-callout-metadata=grey] .callout-content {
+  background-color: rgba(0, 0, 0, .02) !important
+}
+
