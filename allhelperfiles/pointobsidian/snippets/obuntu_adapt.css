@@ -60,9 +60,15 @@
   background: var(--color-fg);
 }
 
+[data-callout="timeline"] {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
 .theme-light [data-callout="timeline"] {
   background-color: white !important;
 }
+
 .theme-light [data-callout-metadata=blue] .callout-content {
   background-color: rgba(214, 233, 255, .3) !important
 }
@@ -80,6 +86,6 @@
 }
 
 .theme-light [data-callout-metadata=grey] .callout-content {
-  background-color: rgba(0, 0, 0, .02) !important
+  background-color: rgba(0, 0, 0, .03) !important
 }
 
