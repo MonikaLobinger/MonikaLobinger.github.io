@@ -219,5 +219,47 @@
       ],
       "key": "ArrowUp"
     }
+  ],
+  "obsidian-prozen:zenmode": [
+    {
+      "modifiers": [
+        "Shift"
+      ],
+      "key": "F4"
+    }
+  ],
+  "ghost-fade-focus:toggle-plugin": [
+    {
+      "modifiers": [
+        "Shift"
+      ],
+      "key": "F5"
+    }
+  ],
+  "obsidian-focus-plugin:toggle-focus-mode": [
+    {
+      "modifiers": [
+        "Shift"
+      ],
+      "key": "F4"
+    }
+  ],
+  "typewriter-mode:move-typewriter-down": [],
+  "typewriter-mode:move-typewriter-up": [],
+  "theme:toggle-light-dark": [
+    {
+      "modifiers": [
+        "Shift"
+      ],
+      "key": "F9"
+    }
+  ],
+  "editor:toggle-spellcheck": [
+    {
+      "modifiers": [
+        "Mod"
+      ],
+      "key": "F9"
+    }
   ]
 }

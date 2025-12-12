@@ -1,3 +1,7 @@
+.theme-dark {
+  --link-decoration: none;
+  --link-decoration-hover: none;
+}
 .theme-light {
   --color-fg:#50af83;
   --color-hv:#50df83;
@@ -88,4 +92,45 @@
 .theme-light [data-callout-metadata=grey] .callout-content {
   background-color: rgba(0, 0, 0, .03) !important
 }
+
+.theme-dark [data-callout-metadata=blue] .callout-content {
+  background-color: #141b52 !important
+}
+
+.theme-dark [data-callout-metadata=green] .callout-content {
+  background-color: #1a4217 !important
+}
+
+.theme-dark [data-callout-metadata=red] .callout-content {
+  background-color: #4c050f !important
+}
+
+.theme-dark [data-callout-metadata=yellow] .callout-content {
+  background-color: #44420e !important
+}
+
+.theme-dark [data-callout-metadata=grey] .callout-content {
+  background-color: rgba(0, 0, 0, .7) !important
+}
+
+.theme-dark [data-callout-metadata=blue] .callout-content a {
+  color: white !important
+}
+
+.theme-dark [data-callout-metadata=green] .callout-content a {
+  color: white !important
+}
+
+.theme-dark [data-callout-metadata=red] .callout-content a {
+  color: white !important
+}
+
+.theme-dark [data-callout-metadata=yellow] .callout-content a {
+  color: white !important
+}
+
+.theme-dark [data-callout-metadata=grey] .callout-content a {
+  color: white !important
+}
+
 
