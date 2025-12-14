@@ -1,2 +1,8 @@
 #!/usr/bin/env bash
-cp site-lib/html/file-tree-content.sv site-lib/html/file-tree-content.html
+if [ -f "site-lib/html/file-tree-content.sv" ]; then
+  mv site-lib/html/file-tree-content.sv site-lib/html/file-tree-content.html
+  mv werkstatt xxxstutiis
+  mv Private werkstatt
+else
+  echo "Bereits Öffentlich"
+fi
