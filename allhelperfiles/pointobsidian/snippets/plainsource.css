@@ -31,11 +31,9 @@
 }
 .markdown-source-view:not(.is-live-preview) .HyperMD-header-2 {
   background: khaki !important;
-  margin-top: 2rem !important;
 }
 .markdown-source-view:not(.is-live-preview) .HyperMD-header-3 {
   background: lemonchiffon !important;
-  margin-top: 1em !important;
 }
 .markdown-source-view:not(.is-live-preview) .HyperMD-header-4 {
   background: lightgoldenrodyellow !important;

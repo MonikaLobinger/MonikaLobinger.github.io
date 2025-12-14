@@ -54,7 +54,7 @@
   --link-decoration-hover: none;
 }
 /* Damit das Plugin "Webpage HTML Export" den Dateinamen nicht als H1 anzeigt */
-.page-title, .mod-header {
+.page-title  {
   display:none;
 }
 .theme-light code {
@@ -63,6 +63,30 @@
 .theme-light .tag {
   background: var(--color-fg);
 }
+p {
+ margin-bottom: 0.4rem !important;
+ margin-top: 0.0rem !important;
+ line-height: 1.4;
+}
+p::first-letter {
+  font-size:1.2rem !important;
+}
+h5 {
+  border-bottom: none !important;
+  text-decoration: underline !important;
+  text-underline-offset: 0.5rem !important;
+}
+h6 {
+  border-bottom: none !important;
+  text-decoration: underline !important;
+  text-decoration-thickness: 1px !important;
+  text-decoration-style: dashed !important;
+  text-underline-offset: 0.5rem !important;
+}
+[data-heading="-footnotes"] {
+    display: none;
+}
+
 
 [data-callout="timeline"] {
   margin: 0 !important;
