@@ -405,6 +405,16 @@ let schule_configuration = {
       },
       show: {__SPEC: {RENDER: true,}, },
     },
+    stutiis: {
+      folders: ["XXXstutiis", ],
+      yaml: {
+        date_created: "",
+        author: "",
+        cssclasses: "studies",
+        publish: false,
+      },
+      show: {__SPEC: {RENDER: true,}, },
+    },
     material: {
       folders: ["Materialien", ],
       yaml: {

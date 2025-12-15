@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+if [ -f "site-lib/html/file-tree-content.sv" ]; then
+  echo "Öffentlich"
+else
+  echo "Privat"
+fi
