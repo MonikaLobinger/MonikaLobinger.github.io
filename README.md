@@ -15,3 +15,7 @@ Viele literarische und philosophische Werke, deren Copyright erloschen ist, sind
 ##  Beitrag
 
 Wer beitragen möchte, besonders gerne zu anderen Bereichen, möge bitte mit mir in Verbindung treten. Wir werden dann einen Modus finden.
+
+## Links für Entwicklung
+- [Quellen Github Commits](https://github.com/MonikaLobinger/schule/commits/main)
+- [Site Github Commits](https://github.com/MonikaLobinger/MonikaLobinger.github.io/commits/main)

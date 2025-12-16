@@ -15,6 +15,7 @@ let pict       = "";
 let pict_width = 0;
 let firstline  = "";
 let sndline    = "";
+let thrdline   = "";
 let prevlink   = "";
 let nextlink   = "";
 let lastline   = "";
@@ -35,6 +36,7 @@ for (const [key, value] of Object.entries(results)) {
             case "pict_width":pict_width = value; break;
             case "firstline": firstline  = value; break;
             case "sndline":   sndline    = value; break;
+            case "thrdline":  thrdline   = value; break;
             case "prevlink":  prevlink   = value; break;
             case "nextlink":  nextlink   = value; break;
             case "lastline":  lastline   = value; break;
@@ -67,6 +69,9 @@ if(pict_width!=0) { %&gt;
 if(firstline!="") { %&gt;</p></div><div class="el-h1"><h1 data-heading="<% firstline %>" dir="auto" class="heading" id="<%_firstline_%>_0"><span class="heading-collapse-indicator collapse-indicator collapse-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon right-triangle"><path d="M3 8L12 17L21 8"></path></svg></span>&lt;% firstline %&gt;</h1></div><div class="el-p"><p dir="auto">&lt;%_*} -%&gt;</p></div><div class="el-p"><p dir="auto">&lt;%<em>* // <strong>*</strong> WRITING Sndline <strong>*</strong>
 if(sndline!="") { %&gt;
 &lt;% sndline %&gt;
+&lt;%</em>*} -%&gt;</p></div><div class="el-p"><p dir="auto">&lt;%<em>* // <strong>*</strong> WRITING Thrdline <strong>*</strong>
+if(thrdline!="") { %&gt;
+&lt;% thrdline %&gt;
 &lt;%</em>*} -%&gt;</p></div><div class="el-p"><p dir="auto">&lt;%_* // <strong>*</strong> Setting Cursor <strong>*</strong> %&gt;
 &lt;% tp.file.cursor(1) %&gt;</p></div><div class="el-p"><p dir="auto">&lt;%<em>* // <strong>*</strong> WRITING links to prev/next <strong>*</strong>
 if(nextlink!="") { %&gt;

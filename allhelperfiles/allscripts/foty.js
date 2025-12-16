@@ -368,6 +368,12 @@ function cbkFmtLastLine(noteName, noteType, noteSetting, tp, app) {
 }
 
 let schule_configuration = {
+  // General section has to be the first section
+  SECTION_GENERAL: //localType: (Number|String|Boolean)
+  {
+    LANGUAGE: "de", // hardcoded:FALLBACK_LANGUAGE "en"
+    RELATIVE_PATH: true, // create links with relative or absolute paths
+  },
   SECTION_NOTETYPES:
   {
     __SPEC: {DEFAULT: "note"},
@@ -393,7 +399,7 @@ let schule_configuration = {
       show: { },
     },
     werkstatt: {
-      folders: ["Mitschriften",],
+      folders: ["Mitschriften"],
       yaml: {
 //        /* schule_public */  date_created: "",
         /* schule_private */ date_created: cbkFmtCreated,
@@ -403,17 +409,34 @@ let schule_configuration = {
         /* schule_private */ cssclasses: "werkstatt",
         publish: false,
       },
-      show: {__SPEC: {RENDER: true,}, },
+      show: {
+        firstline: "Mitschrift",
+        sndline:   "zu [[]]",
+        thrdline:  "## Offen",
+      },
     },
-    stutiis: {
-      folders: ["XXXstutiis", ],
+    stutiisgen: {
+      folders: ["XXXstutiis"],
       yaml: {
         date_created: "",
         author: "",
         cssclasses: "studies",
         publish: false,
       },
-      show: {__SPEC: {RENDER: true,}, },
+    },
+    stutiis: {
+      folders: ["XXXstutiis/Mitschriften"],
+      yaml: {
+        date_created: "",
+        author: "",
+        cssclasses: "studies",
+        publish: false,
+      },
+      show: {
+        firstline: "Mitschrift",
+        sndline:   "zu [[]]",
+        thrdline:  "## Offen",
+      },
     },
     material: {
       folders: ["Materialien", ],
@@ -6071,8 +6094,37 @@ class Templater {
           let f = String(folders)
           folders = [f]
         }
+        let containssubpaths = folders.some(f => {
+          let hasdelimiter = f.includes("\\")
+          if(!hasdelimiter) {
+            hasdelimiter = f.includes("/")
+          }
+          return hasdelimiter
+        })
         let depth=0
-        let answer = pathParts.some(part => {
+        let answer = false
+        if(containssubpaths) {
+          // folders with subpaths have higher priority
+          // more subpaths have higher priority
+          folders.some(folder => {
+            let factor = 0
+            let idx = -1
+            if(folder.includes("\\") || folder.includes("/")) {
+              idx = noteWithPath.lastIndexOf(folder) 
+              factor = (folder.match(/\//g) || []).length
+              if(factor == 0) {
+                factor = (folder.match(/\\/g) || []).length
+              }
+            }
+            if(idx>-1) {
+              depth=factor*100+idx
+              answer = true
+              console.log( folders[0] + " " + depth + " " + noteWithPath )
+            }
+          })
+        }
+        if(answer == false) {
+          answer = pathParts.some(part => {
           depth++
           return folders.some(folder => {
             if(0 == part.localeCompare(folder)) {
@@ -6080,6 +6132,7 @@ class Templater {
             }
           })
         })
+        }
         if(answer == true) {
           if(depthArr.some(d => d > depth)) {
             answer = false
