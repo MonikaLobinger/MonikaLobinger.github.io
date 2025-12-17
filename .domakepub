@@ -4,9 +4,15 @@ if [ ! -f "site-lib/html/file-tree-content.sv" ]; then
    sed -i 's/<div class="tree-item mod-collapsible is-collapsed nav-folder" data-depth="1"><div class="tree-item-self is-clickable mod-collapsible nav-folder-title" data-path="Werkstatt".*zzzzzz<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div><\/div><\/div>//' site-lib/html/file-tree-content.html
    sed -i 's/XXXstutiis/Werkstatt/g' site-lib/html/file-tree-content.html
    sed -i 's/xxxstutiis/werkstatt/g' site-lib/html/file-tree-content.html
-   find werkstatt -type f -name "*.html" -print0 | xargs -0 sed -i 's/xxxstutiis/werkstatt/g' site-lib/html/file-tree-content.html
    mv werkstatt Private
    mv xxxstutiis werkstatt
+   find werkstatt -type f -name "*.html" -print0 | xargs -0 sed -i 's/xxxstutiis/werkstatt/g'
+   find werkstatt -type f -name "*.html" -print0 | xargs -0 sed -i 's/XXXstutiis/Werkstatt/g'
+
+   if grep -i 'xxxstu' home.html >/dev/null; then
+     echo "xxxstu in home.html"
+   fi
+
    cp /media/monika/HOME/OneDrive/Notes/Projekte/Schule/README.md .
  else
    echo "Bereits Privat"

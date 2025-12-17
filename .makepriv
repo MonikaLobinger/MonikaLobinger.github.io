@@ -2,6 +2,8 @@
 if [ -f "site-lib/html/file-tree-content.sv" ]; then
   mv site-lib/html/file-tree-content.sv site-lib/html/file-tree-content.html
   mv werkstatt xxxstutiis
+  find xxxstutiis -type f -name "*.html" -print0 | xargs -0 sed -i 's/werkstatt/xxxstutiis/g'
+  find xxxstutiis -type f -name "*.html" -print0 | xargs -0 sed -i 's/Werkstatt/XXXstutiis/g'
   mv Private werkstatt
 else
   echo "Bereits Privat"

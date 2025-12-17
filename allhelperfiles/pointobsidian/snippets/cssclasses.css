@@ -1,0 +1,98 @@
+.werkstatt {
+  background-image: linear-gradient(to right, #dddddd 0%, white 10%, white 90%, #dddddd 100%);
+}
+.markdown-reading-view .werkstatt {
+  background-size: 100% 100%;
+  background-position: top 1rem right -2rem;
+  background-image: url('data:image/svg+xml,<svg height="30" width="60" xmlns="http://www.w3.org/2000/svg"><text x="10" y="10" fill="%23F6F6F6">privat</text></svg>');
+}
+.studies {
+  background-image: linear-gradient(to right, white 92%, #cccc90 100%);
+  background-image: linear-gradient(to right, lightgoldenrodyellow 0%, white 3%, white 97%, ivory 100%);
+  background-image: linear-gradient(to right, lemonchiffon 0%, white 3%, white 97%, lemonchiffon 100%);
+  background-image: linear-gradient(to right, khaki 0%, white 3%, white 97%, khaki 100%);
+  background-image: linear-gradient(to right, #cccc90 0%, white 3%, white 97%, #cccc90 100%);
+}
+.bigbiglist h2 {
+  border-bottom: 0;
+  border-top: 1px solid black;
+  padding-top: 0;
+  font-size: 1.2rem !important; 
+  margin-bottom: 0 !important;
+  padding-bottom: 0;
+}
+.bigbiglist h3, h4, h5, h6 {
+  text-decoration: none !important;
+  border-bottom: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  font-size: 1rem !important; 
+  font-weight: normal !important;
+}
+.bigbiglist h3 {
+  margin-left: 1rem !important;
+}
+.bigbiglist h4 {
+  margin-left: 2rem !important;
+}
+.bigbiglist li {
+   margin-left: 2rem !important;
+}
+.bigbiglist h5 {
+  margin-left: 3rem !important;
+}
+.bigbiglist h6 {
+  margin-left: 4rem !important;
+}
+.bigbiglist p {
+  padding-left: 5rem !important;
+  position: relative;
+  top: -0.8rem;
+  line-height: 1px;
+}
+.bigbiglist ul {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.bigbiglist li {
+   margin-left: 2rem !important;
+}
+
+
+.catalog table.dataview.table-view-table {
+  border-left: 0;
+  border-top: 0;
+  border-bottom: 0;
+}
+.catalog table.dataview.table-view-table th {
+  background: blue;
+  display: none;
+}
+.catalog .markdown-embed-title {
+  display: none;
+}
+.catalog .block-language-dataviewjs.node-insert-event > p {
+  xmargin-top: 0 !important;
+  xmargin-bottom: 0 !important;
+}
+
+.catalog div.block-language-dataviewjs.node-insert-event > div {
+  xmargin-top: 0 !important;
+  xmargin-bottom: 0 !important;
+  xpadding-left: 0.3rem !important;
+}
+.catalog div.block-language-dataviewjs.node-insert-event * {
+  xmargin-top: 0 !important;
+  xmargin-bottom: 0 !important;
+  xpadding-top: 0 !important;
+  xpadding-bottom: 0 !important;
+}
+.catalog div.block-language-dataviewjs.node-insert-event h2 {
+  padding-left: 0.5rem !important;
+  margin-top: 0.4rem !important;
+  border-bottom: 0 !important;
+}
+.catalog div.block-language-dataviewjs.node-insert-event h3 {
+  padding-left: 1.5rem !important;
+  border-bottom: 0 !important;
+}
