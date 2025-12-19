@@ -4,6 +4,7 @@ source: https://discord.com/channels/686053708261228577/702656734631821413/11568
 Angepasst 
 */
 
+#cssfile_timeline { color: blue; }
 /* Timeline Callout settings */
 body {
   --timeline-title-color: var(--text-normal);

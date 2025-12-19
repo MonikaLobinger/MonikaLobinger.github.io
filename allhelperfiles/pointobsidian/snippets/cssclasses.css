@@ -1,3 +1,4 @@
+#cssfile_cssclasses { color: blue; }
 .werkstatt {
   background-image: linear-gradient(to right, #dddddd 0%, white 10%, white 90%, #dddddd 100%);
 }

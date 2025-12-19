@@ -23,7 +23,9 @@ function filelink(file,noteText) {
 }
 function ddclink(ddc) {
   let ddclink = "";
-  ddclink = "[[DDCKlassen#" + ddc + "|" + ddc + "]]"
+  if (ddc != null) {
+    ddclink = "[[DDCKlassen#" + ddc + "|" + ddc + "]]"
+  }
   return ddclink;
 }
 function media(m) {
@@ -49,7 +51,7 @@ const pages = await Promise.all(
       };
    })
 );
-dv.table(["Filelink", "Ddclink", "Media"], pages
+dv.table(["Eintrag", "Ddc", "Medien"], pages
   .sort((a, b) => a.ddckey - b.ddckey)
   .map(p => [
     p.fl,
