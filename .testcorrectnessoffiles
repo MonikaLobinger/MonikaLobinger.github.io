@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+   if grep -i 'xxxstu' home.html >/dev/null; then
+     echo "xxxstu in home.html"
+   fi
+   if find materialien -name "*.html" -print0 | xargs -0 grep 'ZuHoeren' >/dev/null; then
+     echo "Links auf ZuHoeren"
+   fi
+   if find materialien -name "*.html" -print0 | xargs -0 grep -i 'xxxstutiis' >/dev/null; then
+     echo "xxxstutiis in Materialen"
+   fi

@@ -51,7 +51,7 @@ const pages = await Promise.all(
       };
    })
 );
-dv.table(["Eintrag", "Ddc", "Medien"], pages
+dv.table(["Einträge: ", "Ddc", "Medien"], pages
   .sort((a, b) => a.ddckey - b.ddckey)
   .map(p => [
     p.fl,

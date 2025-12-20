@@ -9,10 +9,7 @@ if [ ! -f "site-lib/html/file-tree-content.sv" ]; then
    mv xxxstutiis werkstatt
    find werkstatt -type f -name "*.html" -print0 | xargs -0 sed -i 's/xxxstutiis/werkstatt/g'
    find werkstatt -type f -name "*.html" -print0 | xargs -0 sed -i 's/XXXstutiis/Werkstatt/g'
-
-   if grep -i 'xxxstu' home.html >/dev/null; then
-     echo "xxxstu in home.html"
-   fi
+   .testcorrectnessoffiles
 
    cp /media/monika/HOME/OneDrive/Notes/Projekte/Schule/README.md .
  else
