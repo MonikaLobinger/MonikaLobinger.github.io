@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-# Hänge im Verzeichnis Materialen in allen Katalogen (html Dateien die mit - beginnen)
-# an alle hrefs zu einer Zahlenüberschrift "_0" an
-find ./materialien -type f -name "-*.html" -print0 | xargs -0 sed -i 's/\( href\S*#[0-9]*\)"/\1_0"/g'
-echo "DDCKlassen korrigiert"
-find ./materialien -type f -name "-*.html" -print0 | xargs -0 sed -n '/\( href\S*#[0-9]*\)"/p'
-

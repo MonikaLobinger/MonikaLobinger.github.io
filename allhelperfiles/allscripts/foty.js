@@ -385,7 +385,7 @@ let schule_configuration = {
         date_created:     {__SPEC:false, DEFAULT: cbkFmtCreated, TYPE: "(Date|Function)", },
         author:           {__SPEC:false, DEFAULT: "Ueberphilosophy", TYPE: "String", },
         publish:          {__SPEC:false, DEFAULT: true, TYPE: "Boolean", },
-        tags:             {__SPEC:false, DEFAULT: "", TYPE: "(Array.<String>|Function)",},
+        tags:             {__SPEC:false, DEFAULT: "[]", TYPE: "(String|Array.<String>|Function)",},
       },
       show: { __SPEC: {RENDER: true,},
         type:             {__SPEC:false, DEFAULT: cbkNoteType, TYPE: "(String|Function)",},
@@ -442,7 +442,7 @@ let schule_configuration = {
       folders: ["Materialien", ],
       yaml: {
         ddckey:  {__SPEC:false, VALUE: "", TYPE: "String", },
-        media:   {__SPEC:false, VALUE: "video", TYPE: "(String|Array.<String>|Function)",},
+        media:   {__SPEC:false, VALUE: "[video]", TYPE: "(String|Array.<String>|Function)",},
       },
     },
     autor: {

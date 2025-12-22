@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#
+# Hänge im Verzeichnis Materialen in allen Katalogen (html Dateien die mit - beginnen)
+# an alle Links auf DDCKlassen, das sind hrefs zu einer Zahlenüberschrift "_0" an
+find ./materialien -type f -name "-*.html" -print0 | xargs -0 sed -i 's/\( href\S*#[0-9]*\)"/\1_0"/g'
+echo "DDCKlassen in Katalogen korrigiert"
+#
+# Ersetze in allen Autoren Dateien an alle links auf timeline.html# "_0" an
+# In der zweiten Zeile korrigiere _0_0 auf _0, denn dieses Script kann auch auf
+# bereits korrigierte Dateien laufen 
+find ./materialien/autoren/ -type f -name "*.html" -print0 | xargs -0 sed -i  's/\(timeline\.html#[^/]*\)\(" class=\)/\1_0\2/'
+find ./materialien/autoren/ -type f -name "*.html" -print0 | xargs -0 sed -i  's/_0_0" class/_0" class/'
+echo "Links von Autoren auf timeline korrigiert"
+#
+# Korrigiere in allen Dateien interne Links und Backlinks

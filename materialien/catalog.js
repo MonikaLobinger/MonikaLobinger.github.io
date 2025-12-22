@@ -39,6 +39,7 @@ const pages = await Promise.all(
       (!p.file.path.includes("Autoren\\")) &&
       (p.file.name != "timeline") &&
       (p.file.name != "DDCKlassen") &&
+      (!p.file.tags.includes("#MOC")) &&
       (depth(p.file.folder)>=tiefe)
      )
    .map(async (page) => {
