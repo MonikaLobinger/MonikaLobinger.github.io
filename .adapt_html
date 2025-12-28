@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 #
+#
 # Hänge im Verzeichnis Materialen in allen Katalogen (html Dateien die mit - beginnen)
 # an alle Links auf DDCKlassen, das sind hrefs zu einer Zahlenüberschrift "_0" an
+# Ist wiederholbar, denn:  hrefxyz#123\ ->  hrefxyz#123_0
 find ./materialien -type f -name "-*.html" -print0 | xargs -0 sed -i 's/\( href\S*#[0-9]*\)"/\1_0"/g'
 echo "DDCKlassen in Katalogen korrigiert"
+#
 #
 # Ersetze in allen Autoren Dateien an alle links auf timeline.html# "_0" an
 # In der zweiten Zeile korrigiere _0_0 auf _0, denn dieses Script kann auch auf
@@ -12,4 +15,44 @@ find ./materialien/autoren/ -type f -name "*.html" -print0 | xargs -0 sed -i  's
 find ./materialien/autoren/ -type f -name "*.html" -print0 | xargs -0 sed -i  's/_0_0" class/_0" class/'
 echo "Links von Autoren auf timeline korrigiert"
 #
-# Korrigiere in allen Dateien interne Links und Backlinks
+#
+# Korrigiere in allen Dateien Links auf Fussnoten und Backlinks
+# Ist wiederholbar, denn ersetzt "#fn durch "filename#fn
+# Ersetze in allen Dateien Search... durch Suche...
+# Ist wiederholbar
+for f in $(find . -name '*.html' ); do
+  # Ersetze  Search... durch Suche...
+  sed -i 's/ placeholder="Search..."/ placeholder="Suche..."/g' $f
+
+  # Korrigiere falls vorhanden Links auf Fussnoten und Backlinks von Fußnoten
+  grep -q "fnref" $f
+  if [ $? -eq 0 ]; then
+    fn=${f#*/}
+    echo "$fn"
+    fn=${fn//\//\\\/}
+    sed -i 's/\(<a href="\)\(#fnref-[[:digit:]]\+-[a-f[:digit:]]\+" \)/\1'"$fn"'\2/g' $f
+    sed -i 's/\(" href="\)\(#fn-[[:digit:]]\+-[a-f[:digit:]]\+" \)/\1'"$fn"'\2/g' $f
+    sed -i 's/"footnote-link/"xxxfootnote-link/g' $f
+    sed -i 's/ footnote-link/ xxxfootnote-link/g' $f
+  fi
+done
+echo "Links zu und von Fussnoten korrigiert"
+#
+#
+# Andere interne Links können nicht korrigiert werden, da die Anker in keiner
+# Weise übertragen werden.
+#
+#
+# Entferne aus dem Dateibaum nicht anzuzeigende Dateien
+# materialien/breadcrumbs.js, materialien/catalog.js,
+# materialien/philosophie/podcasts_uni_wien, materialien/philosophie/uni_wien
+# Ist wiederholbar
+declare -a js=("breadcrumbs" "catalog")
+for i in "${js[@]}"; do
+   sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="2"><a class="tree-item-self is-clickable nav-file-title" href="materialien\/'"$i"'.js" data-path="Materialien\/'"$i"'.js"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><div class="nav-file-tag">js<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
+done
+declare -a mat=("podcasts_uni_wien" "uni_wien")
+for i in "${mat[@]}"; do
+   sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="3"><a class="tree-item-self is-clickable nav-file-title" href="materialien\/philosophie\/'"$i"'.html" data-path="Materialien\/Philosophie\/'"$i"'.md"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
+done
+echo "Überflüssige Dateien aus dem Dateibaum gelöscht"

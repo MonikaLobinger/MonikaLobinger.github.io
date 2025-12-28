@@ -358,6 +358,14 @@ let example_configuration3 = {
 //user_configuration = example_configuration3
 //#endregion EXAMPLE CONFIGURATIONS
 
+function cbkTimeLine(noteName, noteType, noteSetting, tp, app) {
+  return "[[timeline#"+noteName+"]]"
+}
+
+function cbkMitschrift(noteName, noteType, noteSetting, tp, app) {
+  return "[[Werkstatt/Mitschriften/@"+noteName+"|Mitschrift]]\n"
+}
+
 function cbkFmtLastLine(noteName, noteType, noteSetting, tp, app) {
   let lastline="## -footnotes"
   let mocstring = noteSetting.getValue("mocstring")
@@ -367,6 +375,97 @@ function cbkFmtLastLine(noteName, noteType, noteSetting, tp, app) {
   return lastline
 }
 
+function isMok(noteName, tp) {
+  let answer = false
+  let path = tp.file.path(true)
+  let parts = path.split("\\")
+  if(parts.length < 2) { parts = path.split("/") }
+  if(parts.length > 1 && parts[parts.length-2] == noteName) {
+    answer = true
+  }
+  return answer
+}
+function isCatalog(noteName,noteSetting) {
+  let answer = false
+  let mocstring = noteSetting.getValue("mocstring")
+  if(noteName.startsWith(mocstring)) {
+    answer = true
+    console.log("ist katalog")
+  }
+  return answer
+}
+function cbkMaterialCssClasses(noteName, noteType, noteSetting, tp, app) {
+  if(isMok(noteName, tp)) return "foldernote"
+  else if(isCatalog(noteName,noteSetting)) return "catalog"
+  else return cbkFmtCssClasses(noteName, noteType, noteSetting, tp, app)
+}
+function cbkMaterialDateCreated(noteName, noteType, noteSetting, tp, app) {
+  if(isMok(noteName, tp)) return "!no!"
+  else return cbkFmtCreated(noteName, noteType, noteSetting, tp, app)
+}
+function cbkMaterialPublish(noteName, noteType, noteSetting, tp, app) {
+  if(isMok(noteName, tp)) return "!no!"
+  else return true
+}
+function cbkMaterialTags(noteName, noteType, noteSetting, tp, app) {
+  if(isMok(noteName, tp)) return "MOC"
+  else return "[]"
+}
+function cbkMaterialDdcKey(noteName, noteType, noteSetting, tp, app) {
+  if(isMok(noteName, tp)) return "!no!"
+  else if(isCatalog(noteName,noteSetting)) return "!no!"
+  else return ""
+}
+function cbkMaterialMedia(noteName, noteType, noteSetting, tp, app) {
+  if(isMok(noteName, tp)) return "!no!"
+  else if(isCatalog(noteName,noteSetting)) return "!no!"
+  else return "video"
+}
+function cbkMaterialAuthor(noteName, noteType, noteSetting, tp, app) {
+  if(isMok(noteName, tp)) return "!no!"
+  else return "Ueberphilosophy"
+}
+function cbkMaterialSndLine(noteName, noteType, noteSetting, tp, app) {
+  // Das Waypoint Plugin schreibt bei korrektem Kommentar Errormeldung in DIESE !js! Datei
+  if(isMok(noteName, tp)) return "% Waypoint %%" 
+  else if(isCatalog(noteName,noteSetting)) {
+    let path = tp.file.path(true)
+    let parts = path.split("\\")
+    if(parts.length < 2) { parts = path.split("/") }
+    if(parts.length > 1) {
+      let heading = ""
+      for(let i = 1; i < parts.length; i++) {
+        heading += "#"
+      }
+      return heading + " " + parts[parts.length-2]
+    } else {
+      return ""
+    }
+  }
+  else return "## []()"
+}
+function cbkMaterialThrdLine(noteName, noteType, noteSetting, tp, app) {
+  if(isMok(noteName, tp)) return ""
+  else if(isCatalog(noteName,noteSetting)) {
+    return "```dataviewjs\nawait dv.executeJs(await dv.io.load(\"Materialien/catalog.js\"));\n```"
+  }
+  else return "#speaker/  #wird_fortgesetzt\n"
+}
+function cbkMaterialFourthLine(noteName, noteType, noteSetting, tp, app) {
+  if(isMok(noteName, tp)) return ""
+  else if(isCatalog(noteName,noteSetting)) return ""
+  else return cbkMitschrift(noteName, noteType, noteSetting, tp, app)
+}
+function cbkMaterialFifthLine(noteName, noteType, noteSetting, tp, app) {
+  if(isMok(noteName, tp)) return ""
+  else if(isCatalog(noteName,noteSetting)) return ""
+  else return "- []()"
+}
+function cbkMaterialLastLine(noteName, noteType, noteSetting, tp, app) {
+  if(isMok(noteName, tp)) return ""
+  else if(isCatalog(noteName,noteSetting)) return ""
+  else return cbkFmtLastLine(noteName, noteType, noteSetting, tp, app)
+}
 let schule_configuration = {
   // General section has to be the first section
   SECTION_GENERAL: //localType: (Number|String|Boolean)
@@ -391,6 +490,10 @@ let schule_configuration = {
         type:             {__SPEC:false, DEFAULT: cbkNoteType, TYPE: "(String|Function)",},
         prevlink:         {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
         nextlink:         {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
+        scriptline:       {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
+        firstline:        {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
+        sndline:          {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
+        thrdline:         {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
         lastline:         {__SPEC:false, DEFAULT: cbkFmtLastLine, TYPE: "(String|Function)",},
       },
     },
@@ -398,7 +501,7 @@ let schule_configuration = {
       yaml: { },
       show: { },
     },
-    werkstatt: {
+    mitschrift : {
       folders: ["Mitschriften"],
       yaml: {
 //        /* schule_public */  date_created: "",
@@ -415,16 +518,7 @@ let schule_configuration = {
         thrdline:  "## Offen",
       },
     },
-    stutiisgen: {
-      folders: ["XXXstutiis"],
-      yaml: {
-        date_created: "",
-        author: "",
-        cssclasses: "studies",
-        publish: false,
-      },
-    },
-    stutiis: {
+    stutiismitschrift: {
       folders: ["XXXstutiis/Mitschriften"],
       yaml: {
         date_created: "",
@@ -438,30 +532,61 @@ let schule_configuration = {
         thrdline:  "## Offen",
       },
     },
+    stutiis: {
+      folders: ["XXXstutiis"],
+      yaml: {
+        date_created: "",
+        author: "",
+        cssclasses: "studies",
+        publish: false,
+      },
+    },
     material: {
       folders: ["Materialien", ],
+      name_prompt: "Titel_der_Vorlesung_Jahr_Institut_Speaker",
       yaml: {
-        ddckey:  {__SPEC:false, VALUE: "", TYPE: "String", },
-        media:   {__SPEC:false, VALUE: "[video]", TYPE: "(String|Array.<String>|Function)",},
+        cssclasses:   cbkMaterialCssClasses,
+        date_created: cbkMaterialDateCreated,
+        publish:      cbkMaterialPublish,
+        tags:         cbkMaterialTags,
+        ddckey:       cbkMaterialDdcKey,
+        media:        cbkMaterialMedia,
+        author:       cbkMaterialAuthor,
+      },
+      show: {
+        scriptline: "```dataviewjs\ndv.executeJs(await dv.io.load(\"Materialien/breadcrumbs.js\"));\n```",
+        sndline:     cbkMaterialSndLine,
+        thrdline:    cbkMaterialThrdLine,
+        fourthline:  cbkMaterialFourthLine,
+        fifthline:   cbkMaterialFifthLine,
+        lastline:    cbkMaterialLastLine,
       },
     },
     autor: {
       folders: ["Autoren",],
+      name_prompt: "Autornachname",
+      name_end: " Quellen",
       yaml: {
         ddckey:  {__SPEC:false, VALUE: "", TYPE: "String", },
+        tags:    cbkNoteName,
+      },
+      show: {
+        scriptline: "```dataviewjs\ndv.executeJs(await dv.io.load(\"Materialien/breadcrumbs.js\"));\n```\n",
+        firstline: cbkNoteName,
+        sndline:  cbkTimeLine,
       },
     },
     diary:          {
+      folders: ["Diary", ],
       title_date_function:  cbkCalcDateTitle,
       title_date_format: "YYYY-MM-DD",
+      yaml: { publish: false, },
       show: {
         prevlink:  cbkPrevDateLink,
         nextlink:  cbkNextDateLink,
         firstline: cbkNoteName,
         sndline:   "## ",
       },
-      yaml: { publish: false, },
-      folders: ["Diary", ],
     },
   },
 }
