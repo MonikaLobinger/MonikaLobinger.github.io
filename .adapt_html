@@ -44,9 +44,14 @@ echo "Links zu und von Fussnoten korrigiert"
 #
 #
 # Entferne aus dem Dateibaum nicht anzuzeigende Dateien
+# show_hotkeys.html, show_styles.html
 # materialien/breadcrumbs.js, materialien/catalog.js,
 # materialien/philosophie/podcasts_uni_wien, materialien/philosophie/uni_wien
 # Ist wiederholbar
+declare -a htm=("show_hotkeys" "show_styles")
+for i in "${htm[@]}"; do
+   sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="1"><a class="tree-item-self is-clickable nav-file-title" href="'"$i"'.html" data-path="'"$i"'.md"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
+done
 declare -a js=("breadcrumbs" "catalog")
 for i in "${js[@]}"; do
    sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="2"><a class="tree-item-self is-clickable nav-file-title" href="materialien\/'"$i"'.js" data-path="Materialien\/'"$i"'.js"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><div class="nav-file-tag">js<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
