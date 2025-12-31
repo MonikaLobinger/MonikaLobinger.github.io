@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+if [ $# -eq 0 ]; then
+ echo ".testcorrectnessoffiles muss mit dem Argument \"domakepub\" oder \"makepriv\" aufgerufen werden"
+ exit 1
+fi
+
+if [ $1 = "domakepub" ]; then
    if grep -i 'xxxstu' home.html >/dev/null; then
      echo "xxxstu in home.html"
    fi
@@ -8,3 +14,8 @@
    if find materialien -name "*.html" -print0 | xargs -0 grep -i 'xxxstutiis' >/dev/null; then
      echo "xxxstutiis in Materialen"
    fi
+elif [ $1 = "makepriv" ]; then
+  :
+else
+  echo "Falsches Argument für testcorrectnessoffiles"
+fi

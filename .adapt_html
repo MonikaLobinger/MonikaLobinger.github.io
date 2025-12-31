@@ -1,63 +1,133 @@
 #!/usr/bin/env bash
 #
-#
-# Hänge im Verzeichnis Materialen in allen Katalogen (html Dateien die mit - beginnen)
-# an alle Links auf DDCKlassen, das sind hrefs zu einer Zahlenüberschrift "_0" an
-# Ist wiederholbar, denn:  hrefxyz#123\ ->  hrefxyz#123_0
-find ./materialien -type f -name "-*.html" -print0 | xargs -0 sed -i 's/\( href\S*#[0-9]*\)"/\1_0"/g'
-echo "DDCKlassen in Katalogen korrigiert"
-#
-#
-# Ersetze in allen Autoren Dateien an alle links auf timeline.html# "_0" an
-# In der zweiten Zeile korrigiere _0_0 auf _0, denn dieses Script kann auch auf
-# bereits korrigierte Dateien laufen 
-find ./materialien/autoren/ -type f -name "*.html" -print0 | xargs -0 sed -i  's/\(timeline\.html#[^/]*\)\(" class=\)/\1_0\2/'
-find ./materialien/autoren/ -type f -name "*.html" -print0 | xargs -0 sed -i  's/_0_0" class/_0" class/'
-echo "Links von Autoren auf timeline korrigiert"
-#
-#
-# Korrigiere in allen Dateien Links auf Fussnoten und Backlinks
-# Ist wiederholbar, denn ersetzt "#fn durch "filename#fn
-# Ersetze in allen Dateien Search... durch Suche...
-# Ist wiederholbar
-for f in $(find . -name '*.html' ); do
-  # Ersetze  Search... durch Suche...
-  sed -i 's/ placeholder="Search..."/ placeholder="Suche..."/g' $f
+if [ $# -eq 0 ]; then
+ echo ".adapt_html muss mit dem Argument \"domakepub\" oder \"makepriv\" aufgerufen werden"
+ exit 1
+fi
 
-  # Korrigiere falls vorhanden Links auf Fussnoten und Backlinks von Fußnoten
-  grep -q "fnref" $f
-  if [ $? -eq 0 ]; then
-    fn=${f#*/}
-    echo "$fn"
-    fn=${fn//\//\\\/}
-    sed -i 's/\(<a href="\)\(#fnref-[[:digit:]]\+-[a-f[:digit:]]\+" \)/\1'"$fn"'\2/g' $f
-    sed -i 's/\(" href="\)\(#fn-[[:digit:]]\+-[a-f[:digit:]]\+" \)/\1'"$fn"'\2/g' $f
-    sed -i 's/"footnote-link/"xxxfootnote-link/g' $f
-    sed -i 's/ footnote-link/ xxxfootnote-link/g' $f
-  fi
-done
-echo "Links zu und von Fussnoten korrigiert"
-#
-#
-# Andere interne Links können nicht korrigiert werden, da die Anker in keiner
-# Weise übertragen werden.
-#
-#
-# Entferne aus dem Dateibaum nicht anzuzeigende Dateien
-# show_hotkeys.html, show_styles.html
-# materialien/breadcrumbs.js, materialien/catalog.js,
-# materialien/philosophie/podcasts_uni_wien, materialien/philosophie/uni_wien
-# Ist wiederholbar
-declare -a htm=("show_hotkeys" "show_styles")
-for i in "${htm[@]}"; do
-   sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="1"><a class="tree-item-self is-clickable nav-file-title" href="'"$i"'.html" data-path="'"$i"'.md"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
-done
-declare -a js=("breadcrumbs" "catalog")
-for i in "${js[@]}"; do
-   sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="2"><a class="tree-item-self is-clickable nav-file-title" href="materialien\/'"$i"'.js" data-path="Materialien\/'"$i"'.js"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><div class="nav-file-tag">js<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
-done
-declare -a mat=("podcasts_uni_wien" "uni_wien")
-for i in "${mat[@]}"; do
-   sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="3"><a class="tree-item-self is-clickable nav-file-title" href="materialien\/philosophie\/'"$i"'.html" data-path="Materialien\/Philosophie\/'"$i"'.md"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
-done
-echo "Überflüssige Dateien aus dem Dateibaum gelöscht"
+
+if [ $1 = "domakepub" ]; then
+  echo ".adapt_html aufgerufen mit domakepub"
+elif [ $1 = "makepriv" ]; then
+  echo ".adapt_html aufgerufen mit makepriv"
+else
+  echo "Falsches Argument für .adapt_html"
+fi
+
+
+if [ $1 = "domakepub" ] || [ $1 = "makepriv" ]; then
+  # Ändert den Dateibaum.
+  # Für die Änderungen, die Public und Private gemeinsam sind, ist es egal, ob
+  # das Original oder die Kopie geändert wird.
+  #
+  # Hänge im Verzeichnis Materialen in allen Katalogen (html Dateien die mit - beginnen)
+  # an alle Links auf DDCKlassen, das sind hrefs zu einer Zahlenüberschrift "_0" an
+  # Ist wiederholbar, denn:  hrefxyz#123\ ->  hrefxyz#123_0
+  find ./materialien -type f -name "-*.html" -print0 | xargs -0 sed -i 's/\( href\S*#[0-9]*\)"/\1_0"/g'
+  echo "DDCKlassen in Katalogen korrigiert"
+  #
+  #
+  # Ersetze in allen Autoren Dateien an alle links auf timeline.html# "_0" an
+  # In der zweiten Zeile korrigiere _0_0 auf _0, denn dieses Script kann auch auf
+  # bereits korrigierte Dateien laufen 
+  find ./materialien/autoren/ -type f -name "*.html" -print0 | xargs -0 sed -i  's/\(timeline\.html#[^/]*\)\(" class=\)/\1_0\2/'
+  find ./materialien/autoren/ -type f -name "*.html" -print0 | xargs -0 sed -i  's/_0_0" class/_0" class/'
+  echo "Links von Autoren auf timeline korrigiert"
+  #
+  #
+  # Ersetze in allen Dateien Search... durch Suche...
+  # Ist wiederholbar
+  # Korrigiere in allen Dateien Links auf Fussnoten und Backlinks
+  # Ist wiederholbar, denn ersetzt "#fn durch "filename#fn
+  for f in $(find . -name '*.html' ); do
+    # Ersetze  Search... durch Suche...
+    sed -i 's/ placeholder="Search..."/ placeholder="Suche..."/g' $f
+    #
+    # Korrigiere falls vorhanden Links auf Fussnoten und Backlinks von Fußnoten
+    grep -q "fnref" $f
+    if [ $? -eq 0 ]; then
+      fn=${f#*/}
+      fn=${fn//\//\\\/}
+      sed -i 's/\(<a href="\)\(#fnref-[[:digit:]]\+-[a-f[:digit:]]\+" \)/\1'"$fn"'\2/g' $f
+      sed -i 's/\(" href="\)\(#fn-[[:digit:]]\+-[a-f[:digit:]]\+" \)/\1'"$fn"'\2/g' $f
+      sed -i 's/"footnote-link/"xxxfootnote-link/g' $f
+      sed -i 's/ footnote-link/ xxxfootnote-link/g' $f
+    fi
+  done
+  echo "Links zu und von Fussnoten korrigiert"
+  #
+  #
+  # Andere interne Links können nicht korrigiert werden, da die Anker in keiner
+  # Weise übertragen werden.
+  #
+  #
+  # Entferne aus dem Dateibaum nicht anzuzeigende Dateien
+  # materialien/breadcrumbs.js, materialien/catalog.js,
+  # materialien/philosophie/podcasts_uni_wien, materialien/philosophie/uni_wien
+  # Ist wiederholbar
+  declare -a js=("breadcrumbs" "catalog")
+  for i in "${js[@]}"; do
+     sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="2"><a class="tree-item-self is-clickable nav-file-title" href="materialien\/'"$i"'.js" data-path="Materialien\/'"$i"'.js"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><div class="nav-file-tag">js<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
+  done
+  declare -a mat=("podcasts_uni_wien" "uni_wien")
+  for i in "${mat[@]}"; do
+     sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="3"><a class="tree-item-self is-clickable nav-file-title" href="materialien\/philosophie\/'"$i"'.html" data-path="Materialien\/Philosophie\/'"$i"'.md"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
+  done
+  echo "Allgemein überflüssige Dateien aus dem Dateibaum gelöscht"
+fi
+
+
+if [ $1 = "domakepub" ]; then
+  # Arbeitet auf der Kopie des Dateibaums
+  # In werkstatt/ ist nun xxxstutiis/
+  #
+  #
+  # Entferne aus dem Dateibaum nicht anzuzeigende Dateien
+  # show_hotkeys.html, show_styles.html
+  declare -a htm=("show_hotkeys" "show_styles")
+  for i in "${htm[@]}"; do
+     sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="1"><a class="tree-item-self is-clickable nav-file-title" href="'"$i"'.html" data-path="'"$i"'.md"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
+  done
+  echo "Für Public überflüssige Dateien aus dem Dateibaum gelöscht"
+  #
+  #
+  # Passe den Dateibaum von Private auf Public an
+  # Entferne zzzzzz das es nur in Private gibt
+  # Ersetze alle Links auf XXXstutiis durch Links auf Werkstatt
+  sed -i 's/<div class="tree-item mod-collapsible is-collapsed nav-folder" data-depth="1"><div class="tree-item-self is-clickable mod-collapsible nav-folder-title" data-path="Werkstatt".*zzzzzz<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div><\/div><\/div>//' site-lib/html/file-tree-content.html
+  sed -i 's/XXXstutiis/Werkstatt/g' site-lib/html/file-tree-content.html
+  sed -i 's/xxxstutiis/werkstatt/g' site-lib/html/file-tree-content.html
+  echo "Den Dateibaum von Private auf Public angepasst"
+  #
+  #
+  # Ersetze alle Links in html Dateien in Werkstatt von xxxstutiis auf werkstatt
+  find werkstatt -type f -name "*.html" -print0 | xargs -0 sed -i 's/xxxstutiis/werkstatt/g'
+  find werkstatt -type f -name "*.html" -print0 | xargs -0 sed -i 's/XXXstutiis/Werkstatt/g'
+  echo "Alle Links in werkstatt von xxxstutiis auf werkstatt geändert"
+elif [ $1 = "makepriv" ]; then
+  # Arbeitet auf dem Original des Dateibaums, der von Public als
+  # file-tree-content.sv gesichert wird
+  # und von Private als file-tree-content.html verwendet wird.
+  # In werkstatt/ ist nun Privat/
+  # xxxstutiis/ ist sichtbar
+  #
+  #
+  # echo "Verschiebe Leer Mitschriften"
+  # Private ist Private
+  # In site-lib/html/file-tree-content.sv wären sie immer noch drin
+  # Und das müssen sie auch bleiben, sonst wirds zu kompliziert
+  # Drum machen wir das gar nicht
+  # mkdir -p Private/mitschriften/leere
+  # for ff in `find Private/mitschriften/zuhoeren -name "@*"`; do
+  #   fn="Private/mitschriften/$(basename $ff)"
+  #   if [ -f "$fn" ]; then
+  #     mv -f "$fn" Private/mitschriften/leere/
+  #   fi
+  # done
+  #
+  #
+  # Ersetze alle Links in html Dateien in xxxstutiis von werkstatt auf xxxstutiis
+  find xxxstutiis -type f -name "*.html" -print0 | xargs -0 sed -i 's/werkstatt/xxxstutiis/g'
+  find xxxstutiis -type f -name "*.html" -print0 | xargs -0 sed -i 's/Werkstatt/XXXstutiis/g'
+  echo "Alle Links in xxxstutiis von werkstatt auf xxxstutiis geändert"
+fi
