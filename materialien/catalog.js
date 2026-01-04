@@ -35,8 +35,7 @@ const pages = await Promise.all(
     dv.pages(eval_foldername)
     .where(p =>
       (p.file.name.substring(0,1) != "-") &&
-      (!p.file.path.includes("Autoren/")) &&
-      (!p.file.path.includes("Autoren\\")) &&
+      (!p.file.path.includes("Autoren")) &&
       (p.file.name != "timeline") &&
       (p.file.name != "DDCKlassen") &&
       (!p.file.tags.includes("#MOC")) &&

@@ -30,17 +30,7 @@ Eine Möglichkeit wäre daher, vollständige Dateien beizutragen. Wenn eine neue
 Andere Möglichkeiten können im Austausch entwickelt werden.
 
 ### Vorlage Quelle
-Man kann sich eine Vorlage z.B. des Namens `Titel_der_Veranstaltung_UniName_Nachname`  erstellen und folgende Einträge ändern:
-- DATUM-DER-FORM-JJJJ-MM-TT: Datum der Erstellung der Form 2011-01-12
-- NNN-3-STELLIGE ZIFFER DIE DIE DDC KATEGORIE IST: Ein passender [DDC](https://www.dnb.de/DE/Professionell/DDC-Deutsch/DDCUebersichten/ddcUebersichten.html?nn=259498#doc259496bodyText3) Schlüssel
-- DIE-NICHT-ZUTREFFENDEN-RAUSLÖSCHEN: Aus [audio,video,text] nur die zutreffenden wählen, die eckigen Klammern und die Kommas zwischen Zutreffenden bleiben bestehen.
-- NAME-DES-AUTORS-DIESER-MARKDOWN-SEITE: Der eigene (Netz)name.
-- \\\`\\\`\\\`: Sollte in der Vorlage dieser String stehen - daraus die Backslashes entfernen
-- LINK-INS-NETZ-ZUR-THEMENSEITE: Link zur Hautseite der Veranstaltung im Netz
-- NAME-DES-SPRECHERS: Name des Vortragenden mit Bindestrichen, z.B. Anna-Otto. Das Wort `#speaker/` bleibt stehen
-- EVTL-WEITERER-SPRECHER: Weitere Vortragende mit Bindestrichen, oder den gesamten String inklusive `#speaker/` löschen.
-- NAME-DIESER-DATEI: Name dieser Markdown Datei ohne die Endung, z.B. `Titel_der_Veranstaltung_UniName_Nachname`. Der Klammeraffe `@` bleibt stehen.
-- LISTE-DER-LINKS-ZU-EINZELVERANSTALTUNGEN: Links zu den Audios/Videos der Einzelveranstaltungen als Liste.
+Man kann sich eine Vorlage z.B. des Namens `Titel_der_Veranstaltung_UniKurzform_SprecherNachname`  erstellen und die variablen Einträge ändern:
 ```
 ---
 cssclasses: material
@@ -64,6 +54,18 @@ dv.executeJs(await dv.io.load("Materialien/breadcrumbs.js"));
 ## -footnotes 
 
 ```
+
+
+- DATUM-DER-FORM-JJJJ-MM-TT: Datum der Erstellung der Form 2011-11-22
+- NNN-3-STELLIGE ZIFFER DIE DIE DDC KATEGORIE IST: Ein passender [DDC](https://www.dnb.de/DE/Professionell/DDC-Deutsch/DDCUebersichten/ddcUebersichten.html?nn=259498#doc259496bodyText3) Schlüssel
+- DIE-NICHT-ZUTREFFENDEN-RAUSLÖSCHEN: Aus [audio,video,text] nur die zutreffenden wählen, die eckigen Klammern und die Kommas zwischen Zutreffenden bleiben bestehen.
+- NAME-DES-AUTORS-DIESER-MARKDOWN-SEITE: Der eigene (Netz)name.
+- \\\`\\\`\\\`: Sollte in der Vorlage dieser String stehen - daraus die Backslashes entfernen
+- LINK-INS-NETZ-ZUR-THEMENSEITE: Link zur Hautseite der Veranstaltung im Netz. Die Beschriftung des Links sollte die Form haben `Titel der Veranstaltung - UniKurzform, SprecherNachname`
+- NAME-DES-SPRECHERS: voller Name des Vortragenden mit Bindestrichen, z.B. Nachname-Vorname. Das Wort `#speaker/` bleibt stehen
+- EVTL-WEITERER-SPRECHER: Weitere Vortragende mit Bindestrichen, oder den gesamten String inklusive `#speaker/` löschen.
+- NAME-DIESER-DATEI: Name dieser Markdown Datei ohne die Endung, z.B. `Titel_der_Veranstaltung_UniKurzform_SprecherNachname`. Der Klammeraffe `@` bleibt stehen.
+- LISTE-DER-LINKS-ZU-EINZELVERANSTALTUNGEN: Links zu den Audios/Videos der Einzelveranstaltungen als Liste.
 
 
 

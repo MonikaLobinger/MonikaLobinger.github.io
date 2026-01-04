@@ -86,14 +86,6 @@
       "key": "Enter"
     }
   ],
-  "insert-current-date": [
-    {
-      "modifiers": [
-        "Mod"
-      ],
-      "key": "R"
-    }
-  ],
   "tag-pane:open": [
     {
       "modifiers": [
@@ -260,6 +252,15 @@
         "Mod"
       ],
       "key": "F9"
+    }
+  ],
+  "editor:delete-paragraph": [],
+  "insert-current-date": [
+    {
+      "modifiers": [
+        "Mod"
+      ],
+      "key": "D"
     }
   ]
 }

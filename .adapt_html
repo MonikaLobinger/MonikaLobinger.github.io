@@ -74,6 +74,19 @@ if [ $1 = "domakepub" ] || [ $1 = "makepriv" ]; then
      sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="3"><a class="tree-item-self is-clickable nav-file-title" href="materialien\/philosophie\/'"$i"'.html" data-path="Materialien\/Philosophie\/'"$i"'.md"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
   done
   echo "Allgemein überflüssige Dateien aus dem Dateibaum gelöscht"
+  #
+  #
+  # Entferne aus materialien/-materialien.html und aus
+  # materialien/philosophie/-philosophie.html
+  # die Verweise im array mat. Zur Zeit:
+  # materialien/philosophie/podcasts_uni_wien, materialien/philosophie/uni_wien
+  # Ist wiederholbar aber nicht umkehrbar, da es auf dem Original arbeitet
+  for i in "${mat[@]}"; do
+    sed -i 's/<tr><td><span><a data-tooltip-position="top" aria-label="Materialien\/Philosophie\/'"$i"'.md" data-href="Materialien\/Philosophie\/'"$i"'.md" href="materialien\/philosophie\/'"$i"'.html" class="internal-link" target="_self" rel="noopener nofollow">Materialien\/Philosophie\/'"$i"'.md<\/a><\/span><\/td><td><span><\/span><\/td><td><span><\/span><\/td><\/tr>//' "materialien/-materialien.html"
+    sed -i 's/<tr><td><span><a data-tooltip-position="top" aria-label="Materialien\/Philosophie\/'"$i"'.md" data-href="Materialien\/Philosophie\/'"$i"'.md" href="materialien\/philosophie\/'"$i"'.html" class="internal-link" target="_self" rel="noopener nofollow">Materialien\/Philosophie\/'"$i"'.md<\/a><\/span><\/td><td><span><\/span><\/td><td><span><\/span><\/td><\/tr>//' "materialien/philosophie/-philosophie.html"
+  done
+  echo "Public nicht vorhandene Links aus -materialien.html und -philosophie.html gelöscht."
+  exit
 fi
 
 
@@ -83,8 +96,8 @@ if [ $1 = "domakepub" ]; then
   #
   #
   # Entferne aus dem Dateibaum nicht anzuzeigende Dateien
-  # show_hotkeys.html, show_styles.html
-  declare -a htm=("show_hotkeys" "show_styles")
+  # show_diagrams, show_hotkeys.html, show_styles.html
+  declare -a htm=("show_diagrams" "show_greek" "show_hotkeys" "show_styles")
   for i in "${htm[@]}"; do
      sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="1"><a class="tree-item-self is-clickable nav-file-title" href="'"$i"'.html" data-path="'"$i"'.md"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
   done
