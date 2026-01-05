@@ -74,19 +74,6 @@ if [ $1 = "domakepub" ] || [ $1 = "makepriv" ]; then
      sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="3"><a class="tree-item-self is-clickable nav-file-title" href="materialien\/philosophie\/'"$i"'.html" data-path="Materialien\/Philosophie\/'"$i"'.md"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
   done
   echo "Allgemein überflüssige Dateien aus dem Dateibaum gelöscht"
-  #
-  #
-  # Entferne aus materialien/-materialien.html und aus
-  # materialien/philosophie/-philosophie.html
-  # die Verweise im array mat. Zur Zeit:
-  # materialien/philosophie/podcasts_uni_wien, materialien/philosophie/uni_wien
-  # Ist wiederholbar aber nicht umkehrbar, da es auf dem Original arbeitet
-  for i in "${mat[@]}"; do
-    sed -i 's/<tr><td><span><a data-tooltip-position="top" aria-label="Materialien\/Philosophie\/'"$i"'.md" data-href="Materialien\/Philosophie\/'"$i"'.md" href="materialien\/philosophie\/'"$i"'.html" class="internal-link" target="_self" rel="noopener nofollow">Materialien\/Philosophie\/'"$i"'.md<\/a><\/span><\/td><td><span><\/span><\/td><td><span><\/span><\/td><\/tr>//' "materialien/-materialien.html"
-    sed -i 's/<tr><td><span><a data-tooltip-position="top" aria-label="Materialien\/Philosophie\/'"$i"'.md" data-href="Materialien\/Philosophie\/'"$i"'.md" href="materialien\/philosophie\/'"$i"'.html" class="internal-link" target="_self" rel="noopener nofollow">Materialien\/Philosophie\/'"$i"'.md<\/a><\/span><\/td><td><span><\/span><\/td><td><span><\/span><\/td><\/tr>//' "materialien/philosophie/-philosophie.html"
-  done
-  echo "Public nicht vorhandene Links aus -materialien.html und -philosophie.html gelöscht."
-  exit
 fi
 
 
@@ -96,8 +83,8 @@ if [ $1 = "domakepub" ]; then
   #
   #
   # Entferne aus dem Dateibaum nicht anzuzeigende Dateien
-  # show_diagrams, show_hotkeys.html, show_styles.html
-  declare -a htm=("show_diagrams" "show_greek" "show_hotkeys" "show_styles")
+  # show_diagrams, show_greek.html, show_hotkeys.html, # show_styles.html
+  declare -a htm=("show_diagrams" "show_greek" "show_hotkeys") # "show_styles"
   for i in "${htm[@]}"; do
      sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="1"><a class="tree-item-self is-clickable nav-file-title" href="'"$i"'.html" data-path="'"$i"'.md"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
   done
@@ -117,6 +104,22 @@ if [ $1 = "domakepub" ]; then
   find werkstatt -type f -name "*.html" -print0 | xargs -0 sed -i 's/xxxstutiis/werkstatt/g'
   find werkstatt -type f -name "*.html" -print0 | xargs -0 sed -i 's/XXXstutiis/Werkstatt/g'
   echo "Alle Links in werkstatt von xxxstutiis auf werkstatt geändert"
+  #
+  #
+  # Entferne aus Kopie von materialien/-materialien.html und aus Kopie von
+  # materialien/philosophie/-philosophie.html
+  # die Verweise im array mat. Zur Zeit:
+  # materialien/philosophie/podcasts_uni_wien, materialien/philosophie/uni_wien
+  # Ist wiederholbar
+  if [ ! -f "materialien/-materialien.sv" ]; then
+    cp "materialien/-materialien.html" "materialien/-materialien.sv"
+    cp "materialien/philosophie/-philosophie.html" "materialien/philosophie/-philosophie.sv"
+  fi
+  for i in "${mat[@]}"; do
+    sed -i 's/<tr><td><span><a data-tooltip-position="top" aria-label="Materialien\/Philosophie\/'"$i"'.md" data-href="Materialien\/Philosophie\/'"$i"'.md" href="materialien\/philosophie\/'"$i"'.html" class="internal-link" target="_self" rel="noopener nofollow">Materialien\/Philosophie\/'"$i"'.md<\/a><\/span><\/td><td><span><\/span><\/td><td><span><\/span><\/td><\/tr>//' "materialien/-materialien.html"
+    sed -i 's/<tr><td><span><a data-tooltip-position="top" aria-label="Materialien\/Philosophie\/'"$i"'.md" data-href="Materialien\/Philosophie\/'"$i"'.md" href="materialien\/philosophie\/'"$i"'.html" class="internal-link" target="_self" rel="noopener nofollow">Materialien\/Philosophie\/'"$i"'.md<\/a><\/span><\/td><td><span><\/span><\/td><td><span><\/span><\/td><\/tr>//' "materialien/philosophie/-philosophie.html"
+  done
+  echo "Public nicht vorhandene Links aus -materialien.html und -philosophie.html gelöscht."
 elif [ $1 = "makepriv" ]; then
   # Arbeitet auf dem Original des Dateibaums, der von Public als
   # file-tree-content.sv gesichert wird
@@ -125,18 +128,12 @@ elif [ $1 = "makepriv" ]; then
   # xxxstutiis/ ist sichtbar
   #
   #
-  # echo "Verschiebe Leer Mitschriften"
-  # Private ist Private
-  # In site-lib/html/file-tree-content.sv wären sie immer noch drin
-  # Und das müssen sie auch bleiben, sonst wirds zu kompliziert
-  # Drum machen wir das gar nicht
-  # mkdir -p Private/mitschriften/leere
-  # for ff in `find Private/mitschriften/zuhoeren -name "@*"`; do
-  #   fn="Private/mitschriften/$(basename $ff)"
-  #   if [ -f "$fn" ]; then
-  #     mv -f "$fn" Private/mitschriften/leere/
-  #   fi
-  # done
+  # Stelle die Originale von materialien/-materialien.html und
+  # materialien/philosophie/-philosophie.html wieder her
+  if [ -f "materialien/-materialien.sv" ]; then
+    mv -f "materialien/-materialien.sv" "materialien/-materialien.html"
+    mv -f "materialien/philosophie/-philosophie.sv" "materialien/philosophie/-philosophie.html"
+  fi
   #
   #
   # Ersetze alle Links in html Dateien in xxxstutiis von werkstatt auf xxxstutiis

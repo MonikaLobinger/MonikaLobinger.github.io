@@ -632,7 +632,7 @@ function cbkAutorTag(noteName, noteType, noteSetting, tp, app) {
   return noteName.replace(/ /g, '-');
 }
 function cbkTimeLine(noteName, noteType, noteSetting, tp, app) {
-  return "![[timeline#"+noteName+"]]"
+  return "[[timeline#"+noteName+"|Zeitleiste]]"
 }
 function cbkSekundaerName(noteName, noteType, noteSetting, tp, app) {
   return noteName+" Sekundaer";
