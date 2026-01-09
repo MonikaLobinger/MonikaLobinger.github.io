@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+if [ -z "$1" ]; then
+  echo "Braucht ein Argument"
+  exit
+fi
+# js-beautify muss man installiert haben:
+# npm -g install js-beautify
+filename=$1
+js-beautify --type css "$1" > "${filename%.*}_pretty_pretty.css"

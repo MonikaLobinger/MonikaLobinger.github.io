@@ -3,6 +3,9 @@ Private/
 private/
 xxxstutiis/
 test/
+in_progress/
+ZZZZZZ2/
+zzzzzz2/
 materialien/philosophie/uni_wien.html
 materialien/philosophie/podcasts_uni_wien.html
 rmdirs
@@ -12,3 +15,11 @@ show_diagrams.html
 show_greek.html
 show_hotkeys.html
 *.sv
+*.swp
+*_pretty_pretty.css
+*_pretty_pretty.html
+*_pretty_pretty.js
+*_pretty_pretty.json
+materialien/breadcrumbs.js
+materialien/catalog.js
+vimrc.js

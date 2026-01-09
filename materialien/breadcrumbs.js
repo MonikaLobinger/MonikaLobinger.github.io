@@ -9,6 +9,7 @@ let arr=[];
 arr.push("[[" + "home" + "]]");
 for (let crumb of crumbs) {
   cnt++;
+  //console.log(dv.current().file.name + " | Tiefe: " + tiefe + " Cnt: " + cnt + " " +  crumb)
   if(cnt == tiefe && dv.current().file.tags.includes("#MOC")) {
     arr.push(trenner + crumb);
   } else {

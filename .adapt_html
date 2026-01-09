@@ -62,9 +62,14 @@ if [ $1 = "domakepub" ] || [ $1 = "makepriv" ]; then
   #
   #
   # Entferne aus dem Dateibaum nicht anzuzeigende Dateien
+  # vimrc.js
   # materialien/breadcrumbs.js, materialien/catalog.js,
   # materialien/philosophie/podcasts_uni_wien, materialien/philosophie/uni_wien
   # Ist wiederholbar
+  declare -a rt=("vimrc")
+  for i in "${rt[@]}"; do
+     sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="1"><a class="tree-item-self is-clickable nav-file-title" href="'"$i"'.js" data-path="'"$i"'.js"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><div class="nav-file-tag">js<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
+  done
   declare -a js=("breadcrumbs" "catalog")
   for i in "${js[@]}"; do
      sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="2"><a class="tree-item-self is-clickable nav-file-title" href="materialien\/'"$i"'.js" data-path="Materialien\/'"$i"'.js"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><div class="nav-file-tag">js<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
@@ -83,18 +88,24 @@ if [ $1 = "domakepub" ]; then
   #
   #
   # Entferne aus dem Dateibaum nicht anzuzeigende Dateien
-  # show_diagrams, show_greek.html, show_hotkeys.html, # show_styles.html
-  declare -a htm=("show_diagrams" "show_greek" "show_hotkeys") # "show_styles"
+  # show_diagrams, show_formats.html show_greek.html, show_hotkeys.html, # show_styles.html
+  declare -a htm=("show_diagrams" "show_formats" "show_greek" "show_hotkeys") # "show_styles"
   for i in "${htm[@]}"; do
      sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="1"><a class="tree-item-self is-clickable nav-file-title" href="'"$i"'.html" data-path="'"$i"'.md"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
   done
   echo "Für Public überflüssige Dateien aus dem Dateibaum gelöscht"
   #
   #
+  # Entferne aus dem Dateibaum nicht anzuzeigende Verzeichnisse
+  # ZZZZZZ2/
+  sed -i 's/<div class="tree-item mod-collapsible is-collapsed nav-folder" data-depth="1"><div class="tree-item-self is-clickable mod-collapsible nav-folder-title" data-path="ZZZZZZ2">.*<div class="tree-item is-collapsed nav-file" data-depth="2"><a class="tree-item-self is-clickable nav-file-title" href="zzzzzz2\/zzzzzz2.html" data-path="ZZZZZZ2\/zzzzzz2.md"><div class="tree-item-inner nav-file-title-content">zzzzzz2<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div><\/div><\/div>//' site-lib/html/file-tree-content.html
+  echo "Für Public überflüssige Verzeichnisse aus dem Dateibaum gelöscht"
+  #
+  #
   # Passe den Dateibaum von Private auf Public an
-  # Entferne zzzzzz das es nur in Private gibt
+  # Entferne zzzzzz1 das es als marker für die letzte Datei nur in Private gibt
   # Ersetze alle Links auf XXXstutiis durch Links auf Werkstatt
-  sed -i 's/<div class="tree-item mod-collapsible is-collapsed nav-folder" data-depth="1"><div class="tree-item-self is-clickable mod-collapsible nav-folder-title" data-path="Werkstatt".*zzzzzz<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div><\/div><\/div>//' site-lib/html/file-tree-content.html
+  sed -i 's/<div class="tree-item mod-collapsible is-collapsed nav-folder" data-depth="1"><div class="tree-item-self is-clickable mod-collapsible nav-folder-title" data-path="Werkstatt".*zzzzzz1<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div><\/div><\/div>//' site-lib/html/file-tree-content.html
   sed -i 's/XXXstutiis/Werkstatt/g' site-lib/html/file-tree-content.html
   sed -i 's/xxxstutiis/werkstatt/g' site-lib/html/file-tree-content.html
   echo "Den Dateibaum von Private auf Public angepasst"
@@ -115,11 +126,26 @@ if [ $1 = "domakepub" ]; then
     cp "materialien/-materialien.html" "materialien/-materialien.sv"
     cp "materialien/philosophie/-philosophie.html" "materialien/philosophie/-philosophie.sv"
   fi
+  if [ ! -f "site-lib/metadata.sv" ]; then
+    cp "site-lib/metadata.json" "site-lib/metadata.sv"
+  fi
   for i in "${mat[@]}"; do
     sed -i 's/<tr><td><span><a data-tooltip-position="top" aria-label="Materialien\/Philosophie\/'"$i"'.md" data-href="Materialien\/Philosophie\/'"$i"'.md" href="materialien\/philosophie\/'"$i"'.html" class="internal-link" target="_self" rel="noopener nofollow">Materialien\/Philosophie\/'"$i"'.md<\/a><\/span><\/td><td><span><\/span><\/td><td><span><\/span><\/td><\/tr>//' "materialien/-materialien.html"
     sed -i 's/<tr><td><span><a data-tooltip-position="top" aria-label="Materialien\/Philosophie\/'"$i"'.md" data-href="Materialien\/Philosophie\/'"$i"'.md" href="materialien\/philosophie\/'"$i"'.html" class="internal-link" target="_self" rel="noopener nofollow">Materialien\/Philosophie\/'"$i"'.md<\/a><\/span><\/td><td><span><\/span><\/td><td><span><\/span><\/td><\/tr>//' "materialien/philosophie/-philosophie.html"
   done
   echo "Public nicht vorhandene Links aus -materialien.html und -philosophie.html gelöscht."
+  #
+  #
+  # Passe in Kopie von site-lib/metadata.json die Backlinks an:
+  # - entferne alle Backlinks die mit xxxstutiis anfangen
+  # - Verschiebe Backlinks mit @ von werkstatt/mitschriften/zuhoeren nach werkstatt/mitschriften
+  # - entferne alle Backlinks, die mit werkstatt anfangen und nicht @ sind
+  # - entferne alle Backlinks, die mit werkstatt anfangen und
+  #   nicht direkt in werkstatt oder in werkstatt/mitschriften sind
+  # Ist wiederholbar, da die entfernten dann ja weg sind
+  python3 .korrigiere_metadata.py
+  echo "Public Backlinks in metadata.json korrigiert"
+
 elif [ $1 = "makepriv" ]; then
   # Arbeitet auf dem Original des Dateibaums, der von Public als
   # file-tree-content.sv gesichert wird
@@ -133,6 +159,9 @@ elif [ $1 = "makepriv" ]; then
   if [ -f "materialien/-materialien.sv" ]; then
     mv -f "materialien/-materialien.sv" "materialien/-materialien.html"
     mv -f "materialien/philosophie/-philosophie.sv" "materialien/philosophie/-philosophie.html"
+  fi
+  if [ -f "site-lib/metadata.sv" ]; then
+    mv -f "site-lib/metadata.sv" "site-lib/metadata.json"
   fi
   #
   #

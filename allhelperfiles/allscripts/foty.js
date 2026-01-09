@@ -84,6 +84,16 @@ let user_configuration_original = {
         //page: { pict: "/_/_resources/pexels-suzyhazelwood-1989704_15p.jpg", pict_width: 100,},
         page: { pict: "/_/_resources/pexels-ekrulila-2203051_22p.jpg", pict_width: 100,},
       },
+      exzerpt:        {
+        marker: "$",
+        folders: ["zwischenreich"],
+        name_prompt: "Autornachname - Buchtitel",
+      },
+      mitschrift:        {
+        marker: "@",
+        folders: ["zwischenreich"],
+        name_prompt: "Exakter Titel der Veranstaltung: Titel_der_Vorlesung_Jahr_Institut_Speaker",
+      },
       ort:            {
         marker: "&",
         folders: ["zwischenreich"],
@@ -99,6 +109,11 @@ let user_configuration_original = {
                 firstline: headerPerson, },
         name_prompt: "Personnachname, Personvorname, ?Geburtsdatum ?OPTIONAL",
         frontmatter: {aliases: aliasPerson,},
+      },
+      randnotizen:        {
+        marker: "@",
+        folders: ["zwischenreich"],
+        name_prompt: "Autornachname - Buchtitel",
       },
       video:          {
         marker: "{v}",
@@ -122,16 +137,6 @@ let user_configuration_original = {
         marker: "°°",
         folders: ["zwischenreich"],
         name_prompt: "Titel Autornachname",
-      },
-      exzerpt:        {
-        marker: "$",
-        folders: ["zwischenreich"],
-        name_prompt: "Autornachname - Buchtitel",
-      },
-      mitschrift:        {
-        marker: "@",
-        folders: ["zwischenreich"],
-        name_prompt: "Autornachname - Buchtitel",
       },
       rezept:         {
         frontmatter: {extra: "breit", },
@@ -282,7 +287,7 @@ function headerOrt(noteName) {
 // mocstring: "Map of Content" (MOC) Marker at the beginning of a filename.
 //    Is part of the semantic notename. Will not be set by foty, but recognized:
 //    callback functions will remove it.
-// marker: String at the beginning of a filename. 
+// marker: String at the beginning of a filename.
 //    Is not part of semantic notename. Will be set by foty.
 // name_end: String at the end of a filename (before extension).
 //    Is not part of semantic notename. Will be set by foty.
@@ -291,10 +296,15 @@ function headerOrt(noteName) {
 //    It uses title_before_date and title_date_format
 // title_before_date: String part before date if title_date_function is used
 // title_date_format: Format of the date part if title_date_function is used
-//    Only recogizes uppercase letters D, M, Y 
+//    Only recogizes uppercase letters D, M, Y
 //    Only accepts formats expanding to pure numbers
 // folders: Names of (sub)folders in which notes of this type will be placed
-//    Only pure folder names are accepted, no paths
+//    Pure folder names are accepted and path parts, e.g. whit two folder types
+//    lettrs:{folders: ["Letters"],} and mylettrs:{folders: ["Private/Letters"],}
+//    lettrs will apply to all folders which contain a pathpart "Letters", e.g.
+//    root/Composers/b/Bach/Letters and root/Letters/from but not to folders
+//    which contain the pathpart "Private/Letters", e.g.  root/Private/Letters
+//    there the folder type mylettrs will apply.
 // tag_pre: String to be prepended to every tag created with cbkFmtTags
 // name_promt: Prompt to be used when asking for notename
 //    Replaces the default prompt hardcoded as NAME_PROMPT in SECTION_TRANSLATE
@@ -304,24 +314,24 @@ function headerOrt(noteName) {
 //    Default if not set is Templaters Default "YYYY-MM-DD"
 // frontmatter: Name does not matter, important is RENDER: false in __SPEC
 //    Has to be same name as in notetypes, to get defaults copied.
-//    Each entry is sent to the template as key value pair before the 
+//    Each entry is sent to the template as key value pair before the
 //    key "____" is sent.
 //    aliases: Array of string
 //        Function cbkFmtAlias notename, mocstring removed  and "," replaced with blank
 //    cssclasses: Array of string
 //        Function cbkFmtCssClasses returns notType in array
 //    date_created: Date
-//        cbkFmtCreated returns current date, respecting 
+//        cbkFmtCreated returns current date, respecting
 //    position:
 //    private:
 //    publish:
 //    tags: Array of strings
-//       Function cbkFmtTags returns type, first letter uppercase 
+//       Function cbkFmtTags returns type, first letter uppercase
 //       and "moc" if mocstring is set and filename starts with mocstring.
 //       Each tag in array will be prepended by String in tag_pre.
 // page: Name does not matter, important is RENDER: true in __SPEC
 //    Has to be same name as in notetypes, to get defaults copied.
-//    Each entry is sent to the template as key value pair after the 
+//    Each entry is sent to the template as key value pair after the
 //    key "____" is sent.
 //    type:
 //    pict:
@@ -383,6 +393,29 @@ let example_configuration3 = {
 //user_configuration = example_configuration3
 //#endregion EXAMPLE CONFIGURATIONS
 
+// Eine erweiterte Konfiguration, die die neuen Features:
+// 1) Foldertype mit Pfad und
+// 2) Kommunikation zwischen den Callback Funktionen.
+// verwendet.
+//
+// zu 1) Neue Notizen in XXXStutiis/Mitschriften werden mit dem Foldertype
+// stuttiismitschrift erstellt und neue Notizen in allen anderen Verzeichnissen,
+// die "Mitschriften" als Pfadbestandteil enthalten mit dem Foldertype
+// werkstattmitschrift. Die Notizen haben unterschiedliche YAML.
+//
+// zu 2) Die Callbackfunktionen haben nun einen optionalen 6. Paramter, ein
+// Objekt, in das sie Eigenschaften schreiben können oder die lesen können, die
+// andere Callback Funktionen gesetzt haben.
+// Die title_date_function cbkAskGoogleForTitle erfrägt von google books
+// eine Liste von bis zu 30 Büchern zu den vom Nutzer gegebenen Suchangaben. Der
+// Nutzer wählt davon ein Buch aus. Aus den Werten dieses ausgewählten Buches
+// sollen später in verschiedenen Callback Funktionen verschiedene YAML Einträge
+// gebildet werden. All diese Werte trägt cbkAskGoogleForTitle als Properties
+// in den 6. Parameter ein. Die anderen Callback Funktionen cbkBuchTitel,
+// cbkBuchAutor, cbkBuchVerlag lesen die Information, die sie brauchen aus
+// dem Objekt und übergeben sie ans YAML.
+// Anmerkung: Dieser Parameter ist immer da, auch wenn nicht alle Funktionen ihn
+// angeben. In Javascript kann man Parameter, die man nicht braucht weglassen.
 let schule_configuration = {
   // General section has to be the first section
   SECTION_GENERAL: {
@@ -401,7 +434,8 @@ let schule_configuration = {
                           // returns Name of the note type
         cssclasses:       {__SPEC:false, DEFAULT: cbkFmtCssClasses, TYPE: "(Array.<String>|Function)"},
         date_created:     {__SPEC:false, DEFAULT: cbkFmtCreated, TYPE: "(Date|Function)", },
-        author:           {__SPEC:false, DEFAULT: "Ueberphilosophy", TYPE: "String", },
+        // /* schule_public */  author:           {__SPEC:false, DEFAULT: "", TYPE: "String", },
+        /* schule_private */ author:           {__SPEC:false, DEFAULT: "Ueberphilosophy", TYPE: "String", },
         publish:          {__SPEC:false, DEFAULT: true, TYPE: "Boolean", },
         tags:             {__SPEC:false, DEFAULT: "[]", TYPE: "(String|Array.<String>|Function)",},
       },
@@ -483,8 +517,6 @@ let schule_configuration = {
     feld:                 { // feld
       folders: ["Feld"],
       schoolyaml: {
-        date_created: cbkFmtCreated,
-        author: "Ueberphilosophy",
         publish: false,
       },
       schoolshow: {
@@ -495,10 +527,10 @@ let schule_configuration = {
         lastline:  cbkFmtLastLine,
       },
     },
-    // XXXstutiis/ ist die öffentliche Version von Werkstatt/
-    // Vor der Veröffentlichung wird (priv) Werkstatt/ als .Werkstatt/ versteckt
-    // und XXXstutiis/ zu Werkstatt/ umbenannt
     stutiis:              { // studies
+      // XXXstutiis/ ist die öffentliche Version von Werkstatt/
+      // Vor der Veröffentlichung wird (priv) Werkstatt/ als .Werkstatt/ versteckt
+      // und XXXstutiis/ zu Werkstatt/ umbenannt
       folders: ["XXXstutiis"],
       schoolyaml: {
         date_created: "",
@@ -510,7 +542,7 @@ let schule_configuration = {
     stutiismitschrift:    { // studies @
       folders: ["XXXstutiis/Mitschriften"],
       marker: "@",
-      name_prompt: "Titel der Veranstaltung",
+      name_prompt: "Exakter Titel der Veranstaltung: Titel_der_Vorlesung_Jahr_Institut_Speaker",
       schoolyaml: {
         date_created: "",
         author: "",
@@ -523,15 +555,12 @@ let schule_configuration = {
         thrdline:  "## Offen",
       },
     },
-    werkstattmitschrift : { // werkstatt @
+    werkstattmitschrift : { // private: werkstatt @, public: studies @
       folders: ["Mitschriften"],
       marker: "@",
-      name_prompt: "Titel der Veranstaltung",
+      name_prompt: "Exakter Titel der Veranstaltung: Titel_der_Vorlesung_Jahr_Institut_Speaker",
       schoolyaml: {
         // /* schule_public */  date_created: "",
-        /* schule_private */ date_created: cbkFmtCreated,
-        // /* schule_public */  author: "",
-        /* schule_private */ author: "Ueberphilosophy",
         // /* schule_public */  cssclasses: "studies",
         /* schule_private */ cssclasses: "werkstatt",
         publish: false,
@@ -545,7 +574,7 @@ let schule_configuration = {
     audio:                { // audio {a}
       folders: ["Werkstatt"],
       marker: "{a}",
-      name_prompt: "?Podcast/Reihe - Autornachname - Audiotitel ?OPTIONAL /ODER",
+      name_prompt: "OPTIONAL Podcast ODER Reihe - Autornachname - Audiotitel",
     },
     buch:                 { // buch {b}
       folders: ["Werkstatt"],
@@ -567,6 +596,8 @@ let schule_configuration = {
         // ungelesen, gelesen, nochmal, teilweise, aktuell
         buchstatus: [
           "gelesen",
+        ],
+        xbuchstatus: [
           "aktuell",
           "teilweise",
           "nochmal",
@@ -579,11 +610,6 @@ let schule_configuration = {
       marker: "$",
       name_prompt: "Autornachname - Buchtitel",
     },
-    mitschrift:           { // mitschrift @
-      folders: ["Werkstatt", "Buchmitschriften"],
-      marker: "@",
-      name_prompt: "Autornachname - Buchtitel",
-    },
     ort:                  { // ort &
       folders: ["Werkstatt"],
       marker: "&",
@@ -592,17 +618,27 @@ let schule_configuration = {
     person:               { // person =
       folders: ["Werkstatt"],
       marker: "=",
-      name_prompt: "Personnachname, Personvorname, ?Geburtsdatum ?OPTIONAL",
+      name_prompt: "Personnachname, Personvorname OPTIONAL , Geburtsdatum",
+      schoolshow: {
+        pict: "teacher-295387_640-pixabay_2026-01-07.png", 
+        pict_width: 100,
+        firstline: headerPerson,
+      }
+    },
+    randnotizen:           { // randnotizen @
+      folders: ["Werkstatt", "Buchmitschriften"],
+      marker: "@",
+      name_prompt: "Autornachname - Buchtitel",
     },
     video:                { // video {v}
       folders: ["Werkstatt"],
       marker: "{v}",
-      name_prompt: "?Reihe - ?Autornachname - Videotitel ?OPTIONAL",
+      name_prompt: "OPTIONAL Reihe - OPTIONAL Autornachname - Videotitel",
     },
     web:                  { // web {w}
       folders: ["Werkstatt"],
       marker: "{w}",
-      name_prompt: "?Autor - Webseitentitel - ?Datum ?OPTIONAL",
+      name_prompt: "OPTIONAL Autor - Webseitentitel - OPTIONAL Datum",
     },
     zitat:                { // zitat °
       folders: ["Werkstatt"],
@@ -940,6 +976,10 @@ function cbkThrdLineFeld(noteName, noteType, noteSetting, tp, app) {
   return "## Adamson\n![[Adamson nnn "+noteName+"]]\n## Weitere"
 }
 user_configuration = schule_configuration
+
+// SECTION AUTOMATICALLY GENERATED BY FOTY PLUGIN
+// END SECTION AUTOMATICALLY GENERATED BY FOTY PLUGIN
+
 //@todo return default value of allowed type if type of given value not allowed
 // Skript für Obsidian um Notizen verschiedener Art zu erstellen, siehe foty.md.
 // Script for Obsidian to create different note types, see foty.md for details.
@@ -6589,7 +6629,7 @@ class Templater {
             let factor = 0
             let idx = -1
             if(folder.includes("\\") || folder.includes("/")) {
-              idx = noteWithPath.lastIndexOf(folder) 
+              idx = noteWithPath.lastIndexOf(folder)
               factor = (folder.match(/\//g) || []).length
               if(factor == 0) {
                 factor = (folder.match(/\\/g) || []).length
