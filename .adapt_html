@@ -98,7 +98,9 @@ if [ $1 = "domakepub" ]; then
   #
   # Entferne aus dem Dateibaum nicht anzuzeigende Verzeichnisse
   # ZZZZZZ2/
+  # allhelperfiles/allresources/private/
   sed -i 's/<div class="tree-item mod-collapsible is-collapsed nav-folder" data-depth="1"><div class="tree-item-self is-clickable mod-collapsible nav-folder-title" data-path="ZZZZZZ2">.*<div class="tree-item is-collapsed nav-file" data-depth="2"><a class="tree-item-self is-clickable nav-file-title" href="zzzzzz2\/zzzzzz2.html" data-path="ZZZZZZ2\/zzzzzz2.md"><div class="tree-item-inner nav-file-title-content">zzzzzz2<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div><\/div><\/div>//' site-lib/html/file-tree-content.html
+  sed -i 's/<div class="tree-item mod-collapsible is-collapsed nav-folder" data-depth="3"><div class="tree-item-self is-clickable mod-collapsible nav-folder-title" data-path="allhelperfiles\/allresources\/private">.*<div class="tree-item-inner nav-file-title-content">zzzzzz3<\/div><div class="nav-file-tag">gif<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div><\/div><\/div>//' site-lib/html/file-tree-content.html
   echo "Für Public überflüssige Verzeichnisse aus dem Dateibaum gelöscht"
   #
   #
@@ -145,6 +147,32 @@ if [ $1 = "domakepub" ]; then
   # Ist wiederholbar, da die entfernten dann ja weg sind
   python3 .korrigiere_metadata.py
   echo "Public Backlinks in metadata.json korrigiert"
+  #
+  #
+  # Lösche in Kopie von site-lib/metadata.json alles Unnötige
+  # Ist wiederholbar, da die entfernten dann ja weg sind
+  python3 .verkleinere_metadata.py
+  echo "In public metadata.json alle private files gelöscht"
+  #
+  #
+  # Lösche in Kopie von site-lib/metadata.json den Inhalt alle Descriptions in "webpages"
+  # Ist wiederholbar 
+  python3 .entferne_desccription_metadata.py
+  echo "In public metadata.json alle descriptions im webpages schlüssel geleert"
+  #
+  #
+  # Von jeder Dateisorte eine Datei beautifien
+  .beautify_json "site-lib/metadata.json"
+  .css_beautify "site-lib/styles/snippets.css"
+  .js_beautify "site-lib/scripts/webpage.js"
+  .html_beautify "site-lib/html/file-tree-content.html"
+  .html_beautify "home.html"
+  cp "site-lib/metadata_pretty_pretty.json" "site-lib/metadata_pretty_pub.json"
+  cp "site-lib/styles/snippets_pretty_pretty.css" "site-lib/styles/snippets_pretty_pub.css"
+  cp "site-lib/scripts/webpage_pretty_pretty.js" "site-lib/scripts/webpage_pretty_pub.js"
+  cp "site-lib/html/file-tree-content_pretty_pretty.html" "site-lib/html/file-tree-content_pretty_pub.html"
+  cp "home_pretty_pretty.html" "home_pretty_pub.html"
+  echo "beautified: s-l/metadata, /styles/snippets, /scripts/webpage, /html/file-tree-content, home"
 
 elif [ $1 = "makepriv" ]; then
   # Arbeitet auf dem Original des Dateibaums, der von Public als
