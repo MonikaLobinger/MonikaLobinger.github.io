@@ -11791,7 +11791,8 @@
       "showInTree": true,
       "treeOrder": 282,
       "backlinks": [
-        "materialien/philosophie/geschichte/geschichte.html"
+        "materialien/philosophie/geschichte/geschichte.html",
+        "werkstatt/mitschriften/-@history_of_philosophy_without_any_gaps_adamson.html"
       ],
       "type": "markdown"
     },
@@ -21630,7 +21631,9 @@
       "exportPath": "werkstatt/mitschriften/adamson/@adamson-001-thales.html",
       "showInTree": true,
       "treeOrder": 369,
-      "backlinks": [],
+      "backlinks": [
+        "werkstatt/mitschriften/-@history_of_philosophy_without_any_gaps_adamson.html"
+      ],
       "type": "markdown"
     },
     "werkstatt/mitschriften/adamson/@adamson-002-anaximander-und-anaximenes.html": {
@@ -21701,7 +21704,9 @@
       "exportPath": "werkstatt/mitschriften/adamson/@adamson-002-anaximander-und-anaximenes.html",
       "showInTree": true,
       "treeOrder": 370,
-      "backlinks": [],
+      "backlinks": [
+        "werkstatt/mitschriften/-@history_of_philosophy_without_any_gaps_adamson.html"
+      ],
       "type": "markdown"
     },
     "werkstatt/mitschriften/adamson/@adamson-003-xenophanes.html": {
@@ -23163,7 +23168,9 @@
       "showInTree": true,
       "treeOrder": 402,
       "backlinks": [
-        "materialien/philosophie/geschichte/history_of_philosophy_without_any_gaps_adamson.html"
+        "materialien/philosophie/geschichte/history_of_philosophy_without_any_gaps_adamson.html",
+        "werkstatt/mitschriften/adamson/@adamson-001-thales.html",
+        "werkstatt/mitschriften/adamson/@adamson-002-anaximander-und-anaximenes.html"
       ],
       "type": "markdown"
     },
@@ -39877,7 +39884,8 @@
       "showInTree": true,
       "treeOrder": 282,
       "backlinks": [
-        "materialien/philosophie/geschichte/geschichte.html"
+        "materialien/philosophie/geschichte/geschichte.html",
+        "werkstatt/mitschriften/-@history_of_philosophy_without_any_gaps_adamson.html"
       ],
       "type": "markdown",
       "data": null
@@ -40849,7 +40857,9 @@
       "exportPath": "werkstatt/mitschriften/adamson/@adamson-001-thales.html",
       "showInTree": true,
       "treeOrder": 369,
-      "backlinks": [],
+      "backlinks": [
+        "werkstatt/mitschriften/-@history_of_philosophy_without_any_gaps_adamson.html"
+      ],
       "type": "markdown",
       "data": null
     },
@@ -40861,7 +40871,9 @@
       "exportPath": "werkstatt/mitschriften/adamson/@adamson-002-anaximander-und-anaximenes.html",
       "showInTree": true,
       "treeOrder": 370,
-      "backlinks": [],
+      "backlinks": [
+        "werkstatt/mitschriften/-@history_of_philosophy_without_any_gaps_adamson.html"
+      ],
       "type": "markdown",
       "data": null
     },
@@ -41224,7 +41236,9 @@
       "showInTree": true,
       "treeOrder": 402,
       "backlinks": [
-        "materialien/philosophie/geschichte/history_of_philosophy_without_any_gaps_adamson.html"
+        "materialien/philosophie/geschichte/history_of_philosophy_without_any_gaps_adamson.html",
+        "werkstatt/mitschriften/adamson/@adamson-001-thales.html",
+        "werkstatt/mitschriften/adamson/@adamson-002-anaximander-und-anaximenes.html"
       ],
       "type": "markdown",
       "data": null

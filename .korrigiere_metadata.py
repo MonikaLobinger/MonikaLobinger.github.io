@@ -31,13 +31,17 @@ def korrigiere_backlinks(fullfilename, backlinks):
     """
     Entfernt alle privaten Backlinks.
     Für die öffentliche Site.
-      xxxstutiis müssen alle weg
-
       Backlinks auf zuhoeren kommen eigentlich vom Elternverzeichnis
+
+      Manche Backlinks kommen von xxxstutiis und sollten eigentlich von werkstatt
+      kommen. Diese umbenennen. Falls sie nun doppelt sind, einen löschen.
+
+      Was jetzt noch an xxxstutiis ist, das muss alles weg
 
       Im Verzeichnis Werkstatt liegen Mitschriften, die aber ohne selbst
       erstellten Inhalt sind. Die einzigen Backlinks, die so eine Datei enthalten
       kann, sind welche von Materialien.
+      Eine Ausnahme ist Adamson
 
       Materialien kann nur Backlinks von Mitschriften haben und, was vlt
       noch benötigt wird, Backlinks von anderen Veranstaltungen in Materialien.
@@ -48,14 +52,33 @@ def korrigiere_backlinks(fullfilename, backlinks):
       gibt es nicht.
     """
     for idx, backlink in enumerate(backlinks.copy()):
-        if backlink.startswith("xxxstutiis") and backlink in backlinks:
-            backlinks.remove(backlink)
-
-    for idx, backlink in enumerate(backlinks.copy()):
         if backlink.startswith("werkstatt/mitschriften/zuhoeren/@"):
             backlinks[idx]=backlink.replace("/zuhoeren", "")
 
-    if fullfilename.startswith("werkstatt/"):
+    for idx, backlink in enumerate(backlinks.copy()):
+        if backlink.startswith("xxxstutiis/mitschriften/@") \
+        or backlink.startswith("xxxstutiis/mitschriften/-@"):
+            if backlink.replace("xxxstutiis", "werkstatt") in backlinks:
+                backlinks.remove(backlink)
+            else:
+                backlinks[idx]=backlink.replace("xxxstutiis", "werkstatt")
+
+    for idx, backlink in enumerate(backlinks.copy()):
+        if backlink.startswith("xxxstutiis") and backlink in backlinks:
+            backlinks.remove(backlink)
+
+    if fullfilename.startswith("werkstatt/mitschriften/-@history_of_philosophy_without_any_gaps_adamson."):
+        for idx, backlink in enumerate(backlinks.copy()):
+            if not backlink.startswith("werkstatt/mitschriften/adamson/@adamson-001-") \
+            and not backlink.startswith("werkstatt/mitschriften/adamson/@adamson-002-") \
+            and not backlink.startswith("materialien/") and backlink in backlinks:
+                backlinks.remove(backlink)
+    elif fullfilename.startswith("werkstatt/mitschriften/adamson/@adamson-"):
+        for idx, backlink in enumerate(backlinks.copy()):
+            if not backlink.startswith("werkstatt/mitschriften/-@history_of_philosophy_without_any_gaps_adamson.") \
+            and not backlink.startswith("materialien/") and backlink in backlinks:
+                backlinks.remove(backlink)
+    elif fullfilename.startswith("werkstatt/"):
         for idx, backlink in enumerate(backlinks.copy()):
             if not backlink.startswith("materialien/") and backlink in backlinks:
                 backlinks.remove(backlink)
@@ -67,6 +90,7 @@ def korrigiere_backlinks(fullfilename, backlinks):
     elif fullfilename.startswith("materialien/"):
         for idx, backlink in enumerate(backlinks.copy()):
             if not backlink.startswith("werkstatt/mitschriften/@") \
+            and not backlink.startswith("werkstatt/mitschriften/-@") \
             and not backlink.startswith("materialien/") and backlink in backlinks:
                 backlinks.remove(backlink)
     else: # allhelperfiles/ zusaetze/
