@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+if [ $# -eq 0 ]; then
+ echo ".testoutput muss mit dem Argument \"domakepub\" oder \"makepriv\" aufgerufen werden"
+ exit 1
+fi
+grep  "999" "materialien/ddcklassen.html" > /dev/null
+if [ $? -ne 0 ]; then
+  echo "DDCKlassen nicht vollständig"
+  echo 'grep  "999" "materialien/ddcklassen.html" > /dev/null'
+fi
+
+grep "Zupancic" "materialien/timeline.html" > /dev/null
+if [ $? -ne 0 ]; then
+  echo "Timeline nicht vollständig"
+  echo 'grep "Zupancic" "materialien/timeline.html" > /dev/null'
+fi
+
+find . -name "-*.html" -print0 | xargs -0 grep -Hl "<span></span>" >/dev/null
+if [ $? -eq 0 ]; then
+  echo "Unvollständige Kataloge: "
+  echo "---"
+  find . -name "-*.html" -print0 | xargs -0 grep -Hl "<span></span>"
+  echo "---"
+fi
+if [ $1 = "domakepub" ]; then
+   if grep -i 'xxxstu' home.html >/dev/null; then
+     echo "xxxstu in home.html"
+   fi
+   if find materialien -name "*.html" -print0 | xargs -0 grep 'ZuHoeren' >/dev/null; then
+     echo ".testoutput: Links auf ZuHoeren"
+   fi
+   if find materialien -name "*.html" -print0 | xargs -0 grep -i 'xxxstutiis' >/dev/null; then
+     echo "xxxstutiis in Materialen"
+   fi
+elif [ $1 = "makepriv" ]; then
+  :
+else
+  echo "Falsches Argument für testoutput"
+fi

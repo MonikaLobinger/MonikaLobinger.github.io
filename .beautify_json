@@ -4,4 +4,8 @@ if [ -z "$1" ]; then
   exit
 fi
 filename=$1
-cat "$1" | python3 -m json.tool > "${filename%.*}_pretty_pretty.json"
+pretty="pretty"
+if [ -n "$2" ]; then
+  pretty="$2"
+fi
+cat "$1" | python3 -m json.tool > "${filename%.*}_pretty_$pretty.json"

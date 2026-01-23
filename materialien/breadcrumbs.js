@@ -1,5 +1,7 @@
+// Folgende Zeile damit es ein bißchen dauert
+// Manchmal funktioniert dv.current() nicht
+app.workspace.getActiveFile()
 const foldername = dv.current().file.folder;
-
 function depth(path) { return path.split("/").length; }
 const tiefe = depth(foldername);
 const crumbs = foldername.split("/");
@@ -7,6 +9,7 @@ let trenner = "&thinsp;&rarr;&thinsp;";
 let cnt = 0;
 let arr=[];
 arr.push("[[" + "home" + "]]");
+//console.log("VOR WHILE")
 for (let crumb of crumbs) {
   cnt++;
   //console.log(dv.current().file.name + " | Tiefe: " + tiefe + " Cnt: " + cnt + " " +  crumb)

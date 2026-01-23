@@ -1,228 +1,7 @@
 module.exports = foty // templater call: "await tp.user.foty(tp, app)"
-// caveat:
-//    Obsidian Preferences Section Appearance
-//      - Show inline title
-//      - Show tab title bar
-//    seem to change the way this template works when creating new unnamed files.
-//    They do not - they change the way, obsidian works on new file creation.
-//    If no inline title and no tab title bar is given, it will pop up a dialog
-//    asking for a filename.
-//    If no inline title but tab title bar is given, one has to press return
-//    after new file creation.
-//    See following post, which describes the solution
-//    https://forum.obsidian.md/t/templater-triggering-before-choosing-files-title/52968/11
-//    and the containing thread, which describes the problem.
-//#region USER CONFIGURATION
-//prettier-ignore
-let user_configuration_original = {
-  // General section has to be the first section
-  SECTION_GENERAL: //localType: (Number|String|Boolean)
-  {
-    LANGUAGE: "de", // hardcoded:FALLBACK_LANGUAGE "en"
-    RELATIVE_PATH: true, // create links with relative or absolute paths
-  },
-  SECTION_TRANSLATE: //localType: (String|Array.<String>|Array.<Array.<String>>)
-  {
-    NAME_PROMPT:         [ ["en", "Pure Name of Note"], ["de", "Name der Notiz (ohne Kenner/Marker)"] ],
-    TYPE_PROMPT:         [ ["en", "Choose type"], ["de", "Typ wählen"] ],
-      // !! Has to be set correctly to name of untitled files in your vault
-    TITLE_NEW_FILE:      [ ["en", "Untitled"], ["de", "Unbenannt"] ],
-  },
-  SECTION_DIALOG: //localType: (Number|Boolean|Array.<Number>|Array.<Boolean>)
-  {
-    TYPE_MAX_ENTRIES: 10, // Max entries in select type dialog
-  },
-  SECTION_NOTETYPES:
-  {
-    __SPEC: {DEFAULT: "note"},// If DEFAULT not/wrong set, first unrepeated is default
-    defaults: {
-      __SPEC: {REPEAT: true},
-      mocstring:          {__SPEC:false, DEFAULT:"_",TYPE:"String", },
-      marker:             {__SPEC:false, DEFAULT:"",TYPE:"String", },
-      name_end:           {__SPEC:false, DEFAULT:"",TYPE:"String", },
-      title_date_function:{__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
-      title_before_date:  {__SPEC:false, DEFAULT:"",TYPE:"String", },
-      title_date_format:  {__SPEC:false, DEFAULT:"YY-MM-DD",TYPE:"Date", },
-      folders:            {__SPEC:false, IGNORE:true,DEFAULT:[""],TYPE:"(Array.<String>)"},
-      tag_pre:            {__SPEC:false, DEFAULT:"0/",TYPE:"String", },
-      name_prompt:        {__SPEC:false, DEFAULT:"",TYPE:"String", },
-      create_same_named_file: {__SPEC:false, DEFAULT: false, TYPE: "Boolean", },
-      date_created_date_format: {__SPEC:false, DEFAULT:"YYYY-MM-DD",TYPE:"Date", },
-      frontmatter: {__SPEC: {RENDER: false,},
-        aliases:          {__SPEC:false, DEFAULT: cbkFmtAlias, TYPE: "(Array.<String>|Function)"},
-        cssclasses:       {__SPEC:false, DEFAULT: cbkFmtCssClasses, TYPE: "(Array.<String>|Function)"},
-        date_created:     {__SPEC:false, DEFAULT: cbkFmtCreated, TYPE: "(Date|Function)", },
-        position:         {__SPEC:false, IGNORE: true, TYPE: "Boolean", },
-        private:          {__SPEC:false, DEFAULT: false, TYPE: "Boolean", },
-        publish:          {__SPEC:false, DEFAULT: false, TYPE: "Boolean", },
-        tags:             {__SPEC:false, DEFAULT: cbkFmtTags, TYPE: "(Array.<String>|Function)",},
-        revised:          {__SPEC:false, DEFAULT: true, TYPE: "Boolean", },
-      },
-      page: { __SPEC: {RENDER: true,},
-        type:             {__SPEC:false, DEFAULT: cbkNoteType, TYPE: "(String|Function)",},
-        pict:             {__SPEC:false, DEFAULT: "", TYPE: "String",},
-        pict_width:       {__SPEC:false, DEFAULT:  0, TYPE: "Number",},
-        prevlink:         {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
-        nextlink:         {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
-        firstline:        {__SPEC:false, DEFAULT: cbkNoteName, TYPE: "(String|Function)",},
-        lastline:         {__SPEC:false, DEFAULT: "## -footnotes", TYPE: "(String|Function)",},
-      },
-    },
-      obsidian:      {
-        folders: ["Obsidian"],
-      },
-      audio:          {
-        marker: "{a}",
-        folders: ["zwischenreich"],
-        name_prompt: "?Podcast/Reihe - Autornachname - Audiotitel ?OPTIONAL /ODER",
-        page: { pict: "/_/_resources/pexels-foteros-352505_15p.jpg", pict_width: 100,},
-      },
-      buch:           {
-        marker: "{b}",
-        folders: ["zwischenreich"],
-        name_prompt: "Autornachname - Buchtitel",
-        //page: { pict: "/_/_resources/pexels-suzyhazelwood-1989704_15p.jpg", pict_width: 100,},
-        page: { pict: "/_/_resources/pexels-ekrulila-2203051_22p.jpg", pict_width: 100,},
-      },
-      exzerpt:        {
-        marker: "$",
-        folders: ["zwischenreich"],
-        name_prompt: "Autornachname - Buchtitel",
-      },
-      mitschrift:        {
-        marker: "@",
-        folders: ["zwischenreich"],
-        name_prompt: "Exakter Titel der Veranstaltung: Titel_der_Vorlesung_Jahr_Institut_Speaker",
-      },
-      ort:            {
-        marker: "&",
-        folders: ["zwischenreich"],
-        page: { pict: "/_/_resources/pexels-dzeninalukac-1563005_10p.jpg", pict_width: 100,
-                firstline: headerOrt, },
-        name_prompt: "Ortsname, Land",
-        frontmatter: {aliases: aliasOrt, },
-      },
-      person:         {
-        marker: "=",
-        folders: ["zwischenreich"],
-        page: { pict: "/_/_resources/pexels-lucasandrade-14097235_15p.jpg", pict_width: 100,
-                firstline: headerPerson, },
-        name_prompt: "Personnachname, Personvorname, ?Geburtsdatum ?OPTIONAL",
-        frontmatter: {aliases: aliasPerson,},
-      },
-      randnotizen:        {
-        marker: "@",
-        folders: ["zwischenreich"],
-        name_prompt: "Autornachname - Buchtitel",
-      },
-      video:          {
-        marker: "{v}",
-        folders: ["zwischenreich"],
-        page: { pict: "/_/_resources/pexels-vladvictoria-2363675_10p.jpg", pict_width: 100,},
-        name_prompt: "?Reihe - ?Autornachname - Videotitel ?OPTIONAL",
-      },
-      web:            {
-        marker: "{w}",
-        folders: ["zwischenreich"],
-        //page: { pict: "/_/_resources/pexels-marcelo-gonzalez-1141370437-31546060_20p.jpg", pict_width: 100,},      
-        page: { pict: "/_/_resources/pexels-drector-14023912_10p.jpg", pict_width: 100,},
-        name_prompt: "?Autor - Webseitentitel - ?Datum ?OPTIONAL",
-      },
-      zitat:          {
-        marker: "°",
-        folders: ["zwischenreich"],
-        name_prompt: "Titel Autornachname",
-      },
-      zitate:         {
-        marker: "°°",
-        folders: ["zwischenreich"],
-        name_prompt: "Titel Autornachname",
-      },
-      rezept:         {
-        frontmatter: {extra: "breit", },
-        folders: ["Rezepte"],
-        name_prompt: "Name des Gerichts, das das Kochrezept beschreibt",
-      },
-      garten:         {
-        folders: ["Garten", "temp"],
-        name_prompt: "Gartenthema",
-      },
-      pflanze:        {
-        folders: ["Pflanzen"],
-        name_prompt: "Pflanzenname",
-      },
-      gartentagebuch: {
-        title_date_function:  cbkCalcDateTitle,
-        title_before_date: "Garten ",
-        page: { prevlink: cbkPrevDateLink, nextlink: cbkNextDateLink, },
-        folders: ["Gartentagebuch"],
-      },
-      lesetagebuch:   {
-        title_date_function:  cbkCalcDateTitle,
-        title_before_date: "Lesetagebucheintrag ",
-        page: { prevlink: cbkPrevDateLink, nextlink: cbkNextDateLink,
-          firstline: "## ArticleTitle\n[ntvzdf]link\n\n",
-        },
-        folders: ["Lesetagebuch"],
-      },
-      unbedacht:      {
-        date_created_date_format:"dddd, D. MMMM YYYY, H:mm:ss",
-        title_date_format: "YY-MM-DD",
-        title_date_function:  cbkCalcDateTitle,
-        title_before_date: "Unbedacht ",
-        page: { prevlink: cbkPrevDateLink, nextlink: cbkNextDateLink, },
-        folders: ["Unbedacht"],
-        frontmatter: { private: true, },
-      },
-      diary:          {
-        title_date_function:  cbkCalcDateTitle,
-        title_date_format: "YYYY-MM-DD",
-        page: { prevlink: cbkPrevDateLink, nextlink: cbkNextDateLink, },
-        folders: ["Diary", "temp"],
-        frontmatter: { private: true, },
-      },
-      verwaltung:     {
-        folders: ["Verwaltung"],
-        name_prompt: "Verwaltungsthema",
-        frontmatter: { private: true, },
-      },
-      done:           {
-        title_date_function:  cbkCalcDateTitle,
-        title_before_date: "Heute erledigt ",
-        page: { prevlink: cbkPrevDateLink, nextlink: cbkNextDateLink, },
-        folders: ["Done"],
-        frontmatter: { private: true, },
-      },
-      it:             {
-        folders: ["IT"],
-      },
-      cookbook:       {
-        name_end: "_draft",
-        folders: ["Cookbook"],
-        name_prompt: "Receipe, zuerst wird es als Entwurf erstellt",
-        frontmatter: { publish: true, },
-      },
-      blog:       {
-        name_end: "_draft",
-        folders: ["Blog"],
-        name_prompt: "Allgemeiner Blogeintrag, zuerst wird es als Entwurf erstellt",
-        frontmatter: { publish: true, },
-      },
-      software:       {
-        folders: ["Software"],
-        name_prompt: "Name der Software, die beschrieben wird",
-      },
-      linux:          {
-        page: { pict: "/_/_resources/Linux_mascot_tux_80p.png", pict_width: 50,},
-        folders: ["Linux"],
-      },
-      note:           {
-      },
-  },
-}
-user_configuration = user_configuration_original
-// Users can use predefined callback functions and can write and use their own
-function aliasPerson(noteName) {
+
+//#region Configuration callbacks
+function cbkAliasPerson(noteName) {
   let aliases=[]
   let name = noteName
   var count = (noteName.match(/,/g) || []).length;
@@ -241,7 +20,7 @@ function aliasPerson(noteName) {
   aliases.push(alias)
   return aliases
 }
-function aliasOrt(noteName) {
+function cbkAliasOrt(noteName) {
   let aliases=[]
   let alias = noteName.replace(/, /g, ",")
   let strArr = alias.split(",")
@@ -252,7 +31,7 @@ function aliasOrt(noteName) {
   aliases.push(alias)
   return aliases
 }
-function headerPerson(noteName) {
+function cbkHeaderPerson(noteName) {
   let header=""
   let name = noteName
   var count = (noteName.match(/,/g) || []).length;
@@ -269,7 +48,7 @@ function headerPerson(noteName) {
     header = name
   return header
 }
-function headerOrt(noteName) {
+function cbkHeaderOrt(noteName) {
   let header = ""
   let name = noteName
   let strArr = name.split(",")
@@ -279,405 +58,14 @@ function headerOrt(noteName) {
     header = name
   return header
 }
-//#endregion USER CONFIGURATION
-//#region EXAMPLE CONFIGURATIONS
-// Entries of the default section are defaults for all sibling sections. Name of
-//    default section does not matter, important is REPEAT: true in __SPEC
-//    (Only one REPEAT is supported)
-// mocstring: "Map of Content" (MOC) Marker at the beginning of a filename.
-//    Is part of the semantic notename. Will not be set by foty, but recognized:
-//    callback functions will remove it.
-// marker: String at the beginning of a filename.
-//    Is not part of semantic notename. Will be set by foty.
-// name_end: String at the end of a filename (before extension).
-//    Is not part of semantic notename. Will be set by foty.
-// title_date_function: Callback function to calculate the filename.
-//    If set as function, it will be used for a new note to set filename.
-//    It uses title_before_date and title_date_format
-// title_before_date: String part before date if title_date_function is used
-// title_date_format: Format of the date part if title_date_function is used
-//    Only recogizes uppercase letters D, M, Y
-//    Only accepts formats expanding to pure numbers
-// folders: Names of (sub)folders in which notes of this type will be placed
-//    Pure folder names are accepted and path parts, e.g. whit two folder types
-//    lettrs:{folders: ["Letters"],} and mylettrs:{folders: ["Private/Letters"],}
-//    lettrs will apply to all folders which contain a pathpart "Letters", e.g.
-//    root/Composers/b/Bach/Letters and root/Letters/from but not to folders
-//    which contain the pathpart "Private/Letters", e.g.  root/Private/Letters
-//    there the folder type mylettrs will apply.
-// tag_pre: String to be prepended to every tag created with cbkFmtTags
-// name_promt: Prompt to be used when asking for notename
-//    Replaces the default prompt hardcoded as NAME_PROMPT in SECTION_TRANSLATE
-// create_same_named_files: Same named files will be created appending a number
-//    Default is false. If set to true linking to prev date file will work wrong.
-// date_created_date_format: Dateformat for cbkFmtCreated, used for date_created
-//    Default if not set is Templaters Default "YYYY-MM-DD"
-// frontmatter: Name does not matter, important is RENDER: false in __SPEC
-//    Has to be same name as in notetypes, to get defaults copied.
-//    Each entry is sent to the template as key value pair before the
-//    key "____" is sent.
-//    aliases: Array of string
-//        Function cbkFmtAlias notename, mocstring removed  and "," replaced with blank
-//    cssclasses: Array of string
-//        Function cbkFmtCssClasses returns notType in array
-//    date_created: Date
-//        cbkFmtCreated returns current date, respecting
-//    position:
-//    private:
-//    publish:
-//    tags: Array of strings
-//       Function cbkFmtTags returns type, first letter uppercase
-//       and "moc" if mocstring is set and filename starts with mocstring.
-//       Each tag in array will be prepended by String in tag_pre.
-// page: Name does not matter, important is RENDER: true in __SPEC
-//    Has to be same name as in notetypes, to get defaults copied.
-//    Each entry is sent to the template as key value pair after the
-//    key "____" is sent.
-//    type:
-//    pict:
-//    pict_width:
-//    prevlink:
-//    nextlink:
-//    firstline:
-//    lastline:
-//prettier-ignore
-let example_configuration1 = {
-  SECTION_NOTETYPES: {
-    note: {
-      marker: "{w}",
-      yaml: {__SPEC: {RENDER: false,}, aliases: aliasOrt, borgia: "Lucrezia", },
-      show: {__SPEC: {RENDER: true,}, firstline: "DAS WORT", fugger: true, },
-    },
-  }
+function cbkBookAlias(noteName, noteType, noteSetting, tp, app, computedValues) {
+  let alias = computedValues.buchautor.slice(0,3) +
+              computedValues.buchtitel.slice(0,3)
+  return alias
 }
-//user_configuration = example_configuration1
-
-let example_configuration2 = {
-  SECTION_TRANSLATE: { TITLE_NEW_FILE: "Unbenannt",  },
-  SECTION_NOTETYPES: {
-    fueralle: {
-      __SPEC: {REPEAT: true},  
-      yaml: {__SPEC: {RENDER: false,},
-        aliases:   {__SPEC:false, DEFAULT: aliasOrt, TYPE: "(Array.<String>|Function)"},
-        borgia:    {__SPEC:false, DEFAULT: "Lucrezia", TYPE: "String", },
-      },
-      show: { __SPEC: {RENDER: true,},
-        firstline: {__SPEC:false, DEFAULT: "DAS WORT", TYPE: "String",},
-        fugger:    {__SPEC:false, DEFAULT: true, TYPE: "Boolean",},
-      },    
-    },
-    alt: { show: { lastline: "ALT", type:"alt"} },
-    note: { marker: "{w}", folders: ["temp"], show: { type:"note"} },
-  }
-}
-//user_configuration = example_configuration2
-
-let example_configuration3 = {
-  SECTION_TRANSLATE: { TITLE_NEW_FILE: "Unbenannt",  },
-  SECTION_NOTETYPES: {
-    defaults: {
-      __SPEC: {REPEAT: true},  
-      yaml: {__SPEC: {RENDER: false,},
-        publish:          {__SPEC:false, DEFAULT: true, TYPE: "Boolean", },
-      },
-      show: { __SPEC: {RENDER: true,},
-        type:      {__SPEC:false, DEFAULT: cbkNoteType, TYPE: "(String|Function)",},
-        firstline: {__SPEC:false, DEFAULT: "First Line", TYPE: "String",},
-        lastline: {__SPEC:false, DEFAULT: "##Footnotes", TYPE: "String",},
-      },    
-    },
-    book: { folders: ["book"], },
-    test: { folders: ["test"], yaml: { publish: false, }, },
-  }
-}
-//user_configuration = example_configuration3
-//#endregion EXAMPLE CONFIGURATIONS
-
-// Eine erweiterte Konfiguration, die die neuen Features:
-// 1) Foldertype mit Pfad und
-// 2) Kommunikation zwischen den Callback Funktionen.
-// verwendet.
-//
-// zu 1) Neue Notizen in XXXStutiis/Mitschriften werden mit dem Foldertype
-// stuttiismitschrift erstellt und neue Notizen in allen anderen Verzeichnissen,
-// die "Mitschriften" als Pfadbestandteil enthalten mit dem Foldertype
-// werkstattmitschrift. Die Notizen haben unterschiedliche YAML.
-//
-// zu 2) Die Callbackfunktionen haben nun einen optionalen 6. Paramter, ein
-// Objekt, in das sie Eigenschaften schreiben können oder die lesen können, die
-// andere Callback Funktionen gesetzt haben.
-// Die title_date_function cbkAskGoogleForTitle erfrägt von google books
-// eine Liste von bis zu 30 Büchern zu den vom Nutzer gegebenen Suchangaben. Der
-// Nutzer wählt davon ein Buch aus. Aus den Werten dieses ausgewählten Buches
-// sollen später in verschiedenen Callback Funktionen verschiedene YAML Einträge
-// gebildet werden. All diese Werte trägt cbkAskGoogleForTitle als Properties
-// in den 6. Parameter ein. Die anderen Callback Funktionen cbkBuchTitel,
-// cbkBuchAutor, cbkBuchVerlag lesen die Information, die sie brauchen aus
-// dem Objekt und übergeben sie ans YAML.
-// Anmerkung: Dieser Parameter ist immer da, auch wenn nicht alle Funktionen ihn
-// angeben. In Javascript kann man Parameter, die man nicht braucht weglassen.
-let schule_configuration = {
-  // General section has to be the first section
-  SECTION_GENERAL: {
-    LANGUAGE: "de", // hardcoded:FALLBACK_LANGUAGE "en"
-    RELATIVE_PATH: true, // create links with relative or absolute paths
-  },
-  SECTION_TRANSLATE: {
-    TITLE_NEW_FILE:      [ ["en", "Untitled"], ["de", "Unbenannt"] ],
-  },
-  SECTION_NOTETYPES: {
-    __SPEC: {DEFAULT: "note"},
-    defaults: {
-      __SPEC: {REPEAT: true},
-      mocstring:          {__SPEC:false, DEFAULT:"-",TYPE:"String", },
-      schoolyaml: {__SPEC: {RENDER: false,},
-                          // returns Name of the note type
-        cssclasses:       {__SPEC:false, DEFAULT: cbkFmtCssClasses, TYPE: "(Array.<String>|Function)"},
-        date_created:     {__SPEC:false, DEFAULT: cbkFmtCreated, TYPE: "(Date|Function)", },
-        // /* schule_public */  author:           {__SPEC:false, DEFAULT: "", TYPE: "String", },
-        /* schule_private */ author:           {__SPEC:false, DEFAULT: "Ueberphilosophy", TYPE: "String", },
-        publish:          {__SPEC:false, DEFAULT: true, TYPE: "Boolean", },
-        tags:             {__SPEC:false, DEFAULT: "[]", TYPE: "(String|Array.<String>|Function)",},
-      },
-      schoolshow: { __SPEC: {RENDER: true,},
-        type:             {__SPEC:false, DEFAULT: cbkNoteType, TYPE: "(String|Function)",},
-        prevlink:         {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
-        nextlink:         {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
-        scriptline:       {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
-        firstline:        {__SPEC:false, DEFAULT: cbkNoteName, TYPE: "(String|Function)",},
-        sndline:          {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
-        thrdline:         {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
-        lastline:         {__SPEC:false, DEFAULT: cbkFmtLastLine, TYPE: "(String|Function)",},
-      },
-    },
-    note:                 { // note
-      schoolyaml: { },
-      schoolshow: { },
-    },
-    diary:                { // diary
-      folders: ["Diary", ],
-      title_date_function:  cbkCalcDateTitle,
-      title_date_format: "YYYY-MM-DD",
-      schoolyaml: { publish: false, },
-      schoolshow: {
-        prevlink:  cbkPrevDateLink,
-        nextlink:  cbkNextDateLink,
-        firstline: cbkNoteName,
-        sndline:   "## ",
-      },
-    },
-    material:             { // foldernote, catalog, material
-      folders: ["Materialien", ],
-      name_prompt: "Titel_der_Vorlesung_Jahr_Institut_Speaker",
-      schoolyaml: {
-        cssclasses:   cbkMaterialCssClasses,
-        date_created: cbkMaterialDateCreated,
-        publish:      cbkMaterialPublish,
-        tags:         cbkMaterialTags,
-        ddckey:       cbkMaterialDdcKey,
-        media:        cbkMaterialMedia,
-        author:       cbkMaterialAuthor,
-      },
-      schoolshow: {
-        scriptline: "```dataviewjs\ndv.executeJs(await dv.io.load(\"Materialien/breadcrumbs.js\"));\n```",
-        sndline:     cbkMaterialSndLine,
-        thrdline:    cbkMaterialThrdLine,
-        fourthline:  cbkMaterialFourthLine,
-        fifthline:   cbkMaterialFifthLine,
-        lastline:    cbkMaterialLastLine,
-      },
-    },
-    autor:                { // autor
-      folders: ["Autoren",],
-      name_prompt: "Autornachname",
-      name_end: " Quellen",
-      schoolyaml: {
-        ddckey:  {__SPEC:false, VALUE: "", TYPE: "String", },
-        tags:    cbkAutorTag,
-      },
-      schoolshow: {
-        scriptline: "```dataviewjs\ndv.executeJs(await dv.io.load(\"Materialien/breadcrumbs.js\"));\n```\n",
-        firstline: cbkNoteName,
-        sndline:  cbkTimeLine,
-      },
-    },
-    autorsek:             { // sekundaer
-      folders: ["Autoren-Sekundaer",],
-      name_prompt: "Autornachname",
-      name_end: " Sekundaer",
-      schoolyaml: {
-        cssclasses: "sekundaer",
-        tags:    cbkAutorTag,
-      },
-      schoolshow: {
-        scriptline: "```dataviewjs\ndv.executeJs(await dv.io.load(\"Materialien/breadcrumbs.js\"));\n```\n",
-        firstline: cbkSekundaerName,
-      },
-    },
-    feld:                 { // feld
-      folders: ["Feld"],
-      schoolyaml: {
-        publish: false,
-      },
-      schoolshow: {
-        scriptline: cbkScriptLineFeld,
-        firstline: cbkFrstLineFeld,
-        sndline:   cbkSndLineFeld,
-        thrdline:  cbkThrdLineFeld,
-        lastline:  cbkFmtLastLine,
-      },
-    },
-    stutiis:              { // studies
-      // XXXstutiis/ ist die öffentliche Version von Werkstatt/
-      // Vor der Veröffentlichung wird (priv) Werkstatt/ als .Werkstatt/ versteckt
-      // und XXXstutiis/ zu Werkstatt/ umbenannt
-      folders: ["XXXstutiis"],
-      schoolyaml: {
-        date_created: "",
-        author: "",
-        cssclasses: "studies",
-        publish: false,
-      },
-    },
-    stutiismitschrift:    { // studies @
-      folders: ["XXXstutiis/Mitschriften"],
-      marker: "@",
-      name_prompt: "Exakter Titel der Veranstaltung: Titel_der_Vorlesung_Jahr_Institut_Speaker",
-      schoolyaml: {
-        date_created: "",
-        author: "",
-        cssclasses: "studies",
-        publish: false,
-      },
-      schoolshow: {
-        firstline: "Mitschrift",
-        sndline:   cbkSndLineMitschrift,
-        thrdline:  "## Offen",
-      },
-    },
-    werkstattmitschrift : { // private: werkstatt @, public: studies @
-      folders: ["Mitschriften"],
-      marker: "@",
-      name_prompt: "Exakter Titel der Veranstaltung: Titel_der_Vorlesung_Jahr_Institut_Speaker",
-      schoolyaml: {
-        // /* schule_public */  date_created: "",
-        // /* schule_public */  cssclasses: "studies",
-        /* schule_private */ cssclasses: "werkstatt",
-        publish: false,
-      },
-      schoolshow: {
-        firstline: "Mitschrift",
-        sndline:   cbkSndLineMitschrift,
-        thrdline:  "## Offen",
-      },
-    },
-    audio:                { // audio {a}
-      folders: ["Werkstatt"],
-      marker: "{a}",
-      name_prompt: "OPTIONAL Podcast ODER Reihe - Autornachname - Audiotitel",
-    },
-    buch:                 { // buch {b}
-      folders: ["Werkstatt"],
-      marker: "{b}",
-      name_prompt: "Autornachname - Buchtitel",
-      title_date_function: cbkAskGoogleForTitle,
-      schoolyaml: {
-        buchtitel: cbkBuchTitel,
-        buchuntertitel: cbkBuchUntertitel,
-        buchautor: cbkBuchAutor,
-        buchautorv: cbkBuchAutorv,
-        buchdatum: cbkBuchDatum,
-        buchverlag: cbkBuchVerlag,
-        buchseiten: cbkBuchSeiten,
-        buchsprache: cbkBuchSprache,
-        buchisbn: cbkBuchIsbn,
-        buchisbn13: cbkBuchIsbn13,
-        buchebook: cbkBuchEbook,
-        // ungelesen, gelesen, nochmal, teilweise, aktuell
-        buchstatus: [
-          "gelesen",
-        ],
-        xbuchstatus: [
-          "aktuell",
-          "teilweise",
-          "nochmal",
-          "ungelesen",
-        ],
-      }
-    },
-    exzerpt:              { // exzerpt $
-      folders: ["Werkstatt"],
-      marker: "$",
-      name_prompt: "Autornachname - Buchtitel",
-    },
-    ort:                  { // ort &
-      folders: ["Werkstatt"],
-      marker: "&",
-      name_prompt: "Ortsname, Land",
-    },
-    person:               { // person =
-      folders: ["Werkstatt"],
-      marker: "=",
-      name_prompt: "Personnachname, Personvorname OPTIONAL , Geburtsdatum",
-      schoolshow: {
-        pict: "teacher-295387_640-pixabay_2026-01-07.png", 
-        pict_width: 100,
-        firstline: headerPerson,
-      }
-    },
-    randnotizen:           { // randnotizen @
-      folders: ["Werkstatt", "Buchmitschriften"],
-      marker: "@",
-      name_prompt: "Autornachname - Buchtitel",
-    },
-    video:                { // video {v}
-      folders: ["Werkstatt"],
-      marker: "{v}",
-      name_prompt: "OPTIONAL Reihe - OPTIONAL Autornachname - Videotitel",
-    },
-    web:                  { // web {w}
-      folders: ["Werkstatt"],
-      marker: "{w}",
-      name_prompt: "OPTIONAL Autor - Webseitentitel - OPTIONAL Datum",
-    },
-    zitat:                { // zitat °
-      folders: ["Werkstatt"],
-      marker: "°",
-      name_prompt: "Titel Autornachname",
-    },
-    zitate:               { // zitate °°
-      folders: ["Werkstatt"],
-      marker: "°°",
-      name_prompt: "Titel Autornachname",
-    },
-  },
-}
-
-function cbkMitschrift(noteName, noteType, noteSetting, tp, app) {
-  return "[[Werkstatt/Mitschriften/@"+noteName+"|Mitschrift]]\n"
-}
-function cbkFmtLastLine(noteName, noteType, noteSetting, tp, app) {
-  let lastline="## -footnotes"
-  let mocstring = noteSetting.getValue("mocstring")
-  if(noteName.startsWith(mocstring)) {
-    lastline = ""
-  }
-  return lastline
-}
-function cbkAutorTag(noteName, noteType, noteSetting, tp, app) {
-  return noteName.replace(/ /g, '-');
-}
-function cbkTimeLine(noteName, noteType, noteSetting, tp, app) {
-  return "[[timeline#"+noteName+"|Zeitleiste]]"
-}
-function cbkSekundaerName(noteName, noteType, noteSetting, tp, app) {
-  return noteName+" Sekundaer";
-}
-function cbkSndLineMitschrift(noteName, noteType, noteSetting, tp, app) {
-  return "zu [[" + noteName + "]]"
-}
-function cbkTest(noteName, noteType, noteSetting, tp, app) {
-  return "yyyy"
+function cbkBookAliasAsTag(noteName, noteType, noteSetting, tp, app, computedValues) {
+  let alias = "bookid/"+cbkBookAlias(noteName, noteType, noteSetting, tp, app, computedValues)
+  return alias
 }
 function cbkBuchTitel(noteName, noteType, noteSetting, tp, app, computedValues) {
   return computedValues.buchtitel
@@ -799,10 +187,13 @@ async function cbkAskGoogleForTitle(noteName, noteType, noteSetting, tp, app, co
           // console.log("AUTOR")
   if(choosenbook.volumeInfo.authors != undefined) {
     writer = ""
+    writerv = ""
     choosenbook.volumeInfo.authors.forEach((a,i) => {
       if(i>0) {
         writer+=", "
-        writerv+=", "
+        if (writerv !== "") {
+          writerv+=", "
+        }
       }
       writer+=nachname(a)
       writerv+=vorname(a)
@@ -854,18 +245,18 @@ async function cbkAskGoogleForTitle(noteName, noteType, noteSetting, tp, app, co
   computedValues.buchisbn = isbn
   computedValues.buchisbn13 = isbn13
   computedValues.buchebook = ebook
-  /*
-  console.log(computedValues.buchtitel)
-  console.log(computedValues.buchuntertitel)
-  console.log(computedValues.buchautor)
-  console.log(computedValues.buchautorv)
-  console.log(computedValues.buchdatum)
-  console.log(computedValues.buchverlag)
-  console.log(computedValues.buchseiten)
-  console.log(computedValues.buchsprache)
-  console.log(computedValues.buchisbn)
-  console.log(computedValues.buchisbn13)
-  console.log(computedValues.buchebook)
+    /*
+    console.log(computedValues.buchtitel)
+    console.log(computedValues.buchuntertitel)
+    console.log(computedValues.buchautor)
+    console.log(computedValues.buchautorv)
+    console.log(computedValues.buchdatum)
+    console.log(computedValues.buchverlag)
+    console.log(computedValues.buchseiten)
+    console.log(computedValues.buchsprache)
+    console.log(computedValues.buchisbn)
+    console.log(computedValues.buchisbn13)
+    console.log(computedValues.buchebook)
   */
   let adaptedTitle = noteTitle.replace(/:/g," ")
   noteTitle = adaptedTitle.replace(/\//g,"")
@@ -975,25 +366,70 @@ function cbkSndLineFeld(noteName, noteType, noteSetting, tp, app) {
 function cbkThrdLineFeld(noteName, noteType, noteSetting, tp, app) {
   return "## Adamson\n![[Adamson nnn "+noteName+"]]\n## Weitere"
 }
-user_configuration = schule_configuration
 
-// SECTION AUTOMATICALLY GENERATED BY FOTY PLUGIN
-// END SECTION AUTOMATICALLY GENERATED BY FOTY PLUGIN
+function cbkMitschrift(noteName, noteType, noteSetting, tp, app) {
+  return "[[Werkstatt/Mitschriften/@"+noteName+"|Mitschrift]]\n"
+}
+function cbkFmtLastLine(noteName, noteType, noteSetting, tp, app) {
+  let lastline="## -footnotes"
+  let mocstring = noteSetting.getValue("mocstring")
+  if(noteName.startsWith(mocstring)) {
+    lastline = ""
+  }
+  return lastline
+}
+function cbkAutorTag(noteName, noteType, noteSetting, tp, app) {
+  return noteName.replace(/ /g, '-');
+}
+function cbkTimeLine(noteName, noteType, noteSetting, tp, app) {
+  return "[[timeline#"+noteName+"|Zeitleiste]]"
+}
+function cbkSekundaerName(noteName, noteType, noteSetting, tp, app) {
+  return noteName+" Sekundaer";
+}
+function cbkSndLineMitschrift(noteName, noteType, noteSetting, tp, app) {
+  return "zu [[" + noteName + "]]"
+}
+function cbkTest(noteName, noteType, noteSetting, tp, app) {
+  return "yyyy"
+}
+function cbkFmtOneAlias(noteName, noteType, noteSetting, tp, app) {
+  let alias = noteName
+  let mocstring = noteSetting.getValue("mocstring")
+  if(noteName.startsWith(mocstring)) {
+    alias = noteName.slice(mocstring.length)
+  }
+  alias = alias.replace(/,/g, ` `).replace(/  /g, ` `)
 
-//@todo return default value of allowed type if type of given value not allowed
-// Skript für Obsidian um Notizen verschiedener Art zu erstellen, siehe foty.md.
-// Script for Obsidian to create different note types, see foty.md for details.
-//
-// Different parts of codes are in different regions.
-// A region starts with //#region REGION_NAME or //# REGION_NAME
-// and it ends with //#endregion REGION_NAME or //#endregion REGION_NAME
-// Regions can be nested.
-// Using Visual Studio Code (and perhaps other source code editors) regions
-// marked this way can be folded for convenience.
-//
-// Some settings for the script can be adapted to user needs. Those are in
-// region USER CONFIGURATION.
-//#region Configuration callbacks
+  if(0 == alias.localeCompare(noteName)) {
+    alias=""
+  }
+  return alias
+}
+function cbkFmtOneAliasSwitch(noteName, noteType, noteSetting, tp, app) {
+  let alias = noteName
+  let mocstring = noteSetting.getValue("mocstring")
+  if(noteName.startsWith(mocstring)) {
+    alias = noteName.slice(mocstring.length)
+  }
+  let idx1=alias.indexOf(",")
+  let idx2=alias.indexOf(",",idx1+1)
+  if(idx2 < 1) idx2 = alias.length-1
+  if(idx1 > 0 && idx2 > 0) {
+    let part1=alias.substring(0,idx1)
+    let part2=alias.substring(idx1+1,idx2)
+    let zwi = "xxxx"
+    alias=alias.replace(part1,zwi)
+    alias=alias.replace(part2,part1)
+    alias=alias.replace(zwi,part2)
+  }
+  alias = alias.replace(/,/g, ` `).replace(/  /g, ` `)
+
+  if(0 == alias.localeCompare(noteName)) {
+    alias=""
+  }
+  return alias
+}
 /** Returns sibling with next/prev date, depending on {@link next}
  *
  * @param {*} next
@@ -1097,7 +533,7 @@ function cbkFmtAlias(noteName, noteType, noteSetting, tp, app) {
     alias = noteName.slice(mocstring.length)
   }
   alias = alias.replace(/,/g, ` `).replace(/  /g, ` `)
-  
+
   if(0 != alias.localeCompare(noteName)) {
     aliases.push(alias)
   }
@@ -1134,7 +570,7 @@ function cbkFmtCreated(noteName, noteType, noteSetting, tp, app) {
   let format = noteSetting.getValue("date_created_date_format")
   if(format == "")
     format = undefined
-  
+
   return tp.date.now(format)
 }
 /** {@link FrontmatterCallback}, returns cssClasses
@@ -1221,6 +657,620 @@ function cbkNextDateLink(noteName, noteType, noteSetting, tp, app) {
   return answer
 }
 //#endregion Configuration callbacks
+
+
+// caveat:
+//    Obsidian Preferences Section Appearance
+//      - Show inline title
+//      - Show tab title bar
+//    seem to change the way this template works when creating new unnamed files.
+//    They do not - they change the way, obsidian works on new file creation.
+//    If no inline title and no tab title bar is given, it will pop up a dialog
+//    asking for a filename.
+//    If no inline title but tab title bar is given, one has to press return
+//    after new file creation.
+//    See following post, which describes the solution
+//    https://forum.obsidian.md/t/templater-triggering-before-choosing-files-title/52968/11
+//    and the containing thread, which describes the problem.
+//#region USER CONFIGURATION
+//prettier-ignore
+let user_configuration_original = {
+  // General section has to be the first section
+  SECTION_GENERAL: //localType: (Number|String|Boolean)
+  {
+    LANGUAGE: "de", // hardcoded:FALLBACK_LANGUAGE "en"
+  },
+  SECTION_TRANSLATE: //localType: (String|Array.<String>|Array.<Array.<String>>)
+  {
+    NAME_PROMPT:         [ ["en", "Pure Name of Note"], ["de", "Name der Notiz (ohne Kenner/Marker)"] ],
+    TYPE_PROMPT:         [ ["en", "Choose type"], ["de", "Typ wählen"] ],
+      // !! Has to be set correctly to name of untitled files in your vault
+    TITLE_NEW_FILE:      [ ["en", "Untitled"], ["de", "Unbenannt"] ],
+  },
+  SECTION_DIALOG: //localType: (Number|Boolean|Array.<Number>|Array.<Boolean>)
+  {
+    TYPE_MAX_ENTRIES: 10, // Max entries in select type dialog
+  },
+  SECTION_NOTETYPES:
+  {
+    __SPEC: {DEFAULT: "note"},// If DEFAULT not/wrong set, first unrepeated is default
+    defaults: {
+      __SPEC: {REPEAT: true},
+      mocstring:          {__SPEC:false, DEFAULT:"_",TYPE:"String", },
+      marker:             {__SPEC:false, DEFAULT:"",TYPE:"String", },
+      name_end:           {__SPEC:false, DEFAULT:"",TYPE:"String", },
+      title_date_function:{__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
+      title_before_date:  {__SPEC:false, DEFAULT:"",TYPE:"String", },
+      title_date_format:  {__SPEC:false, DEFAULT:"YY-MM-DD",TYPE:"Date", },
+      folders:            {__SPEC:false, IGNORE:true,DEFAULT:[""],TYPE:"(Array.<String>)"},
+      tag_pre:            {__SPEC:false, DEFAULT:"0/",TYPE:"String", },
+      name_prompt:        {__SPEC:false, DEFAULT:"",TYPE:"String", },
+      create_same_named_file: {__SPEC:false, DEFAULT: false, TYPE: "Boolean", },
+      date_created_date_format: {__SPEC:false, DEFAULT:"YYYY-MM-DD",TYPE:"Date", },
+      frontmatter: {__SPEC: {RENDER: false,},
+        aliases:          {__SPEC:false, DEFAULT: cbkFmtAlias, TYPE: "(Array.<String>|Function)"},
+        cssclasses:       {__SPEC:false, DEFAULT: cbkFmtCssClasses, TYPE: "(Array.<String>|Function)"},
+        date_created:     {__SPEC:false, DEFAULT: cbkFmtCreated, TYPE: "(Date|Function)", },
+        position:         {__SPEC:false, IGNORE: true, TYPE: "Boolean", },
+        private:          {__SPEC:false, DEFAULT: false, TYPE: "Boolean", },
+        publish:          {__SPEC:false, DEFAULT: false, TYPE: "Boolean", },
+        tags:             {__SPEC:false, DEFAULT: cbkFmtTags, TYPE: "(Array.<String>|Function)",},
+        revised:          {__SPEC:false, DEFAULT: true, TYPE: "Boolean", },
+      },
+      page: { __SPEC: {RENDER: true,},
+        type:             {__SPEC:false, DEFAULT: cbkNoteType, TYPE: "(String|Function)",},
+        pict:             {__SPEC:false, DEFAULT: "", TYPE: "String",},
+        pict_width:       {__SPEC:false, DEFAULT:  0, TYPE: "Number",},
+        prevlink:         {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
+        nextlink:         {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
+        firstline:        {__SPEC:false, DEFAULT: cbkNoteName, TYPE: "(String|Function)",},
+        lastline:         {__SPEC:false, DEFAULT: "## -footnotes", TYPE: "(String|Function)",},
+      },
+    },
+      obsidian:      {
+        folders: ["Obsidian"],
+      },
+      audio:          {
+        marker: "{a}",
+        folders: ["zwischenreich"],
+        name_prompt: "?Podcast/Reihe - Autornachname - Audiotitel ?OPTIONAL /ODER",
+        page: { pict: "/_/_resources/pexels-foteros-352505_15p.jpg", pict_width: 100,},
+      },
+      buch:           {
+        marker: "{b}",
+        folders: ["zwischenreich"],
+        name_prompt: "Autornachname - Buchtitel",
+        //page: { pict: "/_/_resources/pexels-suzyhazelwood-1989704_15p.jpg", pict_width: 100,},
+        page: { pict: "/_/_resources/pexels-ekrulila-2203051_22p.jpg", pict_width: 100,},
+      },
+      exzerpt:        {
+        marker: "$",
+        folders: ["zwischenreich"],
+        name_prompt: "Autornachname - Buchtitel",
+      },
+      mitschrift:        {
+        marker: "@",
+        folders: ["zwischenreich"],
+        name_prompt: "Exakter Titel der Veranstaltung: Titel_der_Vorlesung_Jahr_Institut_Speaker",
+      },
+      ort:            {
+        marker: "&",
+        folders: ["zwischenreich"],
+        page: { pict: "/_/_resources/pexels-dzeninalukac-1563005_10p.jpg", pict_width: 100,
+                firstline: cbkHeaderOrt, },
+        name_prompt: "Ortsname, Land",
+        frontmatter: {aliases: cbkAliasOrt, },
+      },
+      person:         {
+        marker: "=",
+        folders: ["zwischenreich"],
+        page: { pict: "/_/_resources/pexels-lucasandrade-14097235_15p.jpg", pict_width: 100,
+                firstline: cbkHeaderPerson, },
+        name_prompt: "Personnachname, Personvorname, ?Geburtsdatum ?OPTIONAL",
+        frontmatter: {aliases: cbkAliasPerson,},
+      },
+      randnotizen:        {
+        marker: "@",
+        folders: ["zwischenreich"],
+        name_prompt: "Autornachname - Buchtitel",
+      },
+      video:          {
+        marker: "{v}",
+        folders: ["zwischenreich"],
+        page: { pict: "/_/_resources/pexels-vladvictoria-2363675_10p.jpg", pict_width: 100,},
+        name_prompt: "?Reihe - ?Autornachname - Videotitel ?OPTIONAL",
+      },
+      web:            {
+        marker: "{w}",
+        folders: ["zwischenreich"],
+        //page: { pict: "/_/_resources/pexels-marcelo-gonzalez-1141370437-31546060_20p.jpg", pict_width: 100,},      
+        page: { pict: "/_/_resources/pexels-drector-14023912_10p.jpg", pict_width: 100,},
+        name_prompt: "?Autor - Webseitentitel - ?Datum ?OPTIONAL",
+      },
+      zitat:          {
+        marker: "°",
+        folders: ["zwischenreich"],
+        name_prompt: "Titel Autornachname",
+      },
+      zitate:         {
+        marker: "°°",
+        folders: ["zwischenreich"],
+        name_prompt: "Titel Autornachname",
+      },
+      rezept:         {
+        frontmatter: {extra: "breit", },
+        folders: ["Rezepte"],
+        name_prompt: "Name des Gerichts, das das Kochrezept beschreibt",
+      },
+      garten:         {
+        folders: ["Garten", "temp"],
+        name_prompt: "Gartenthema",
+      },
+      pflanze:        {
+        folders: ["Pflanzen"],
+        name_prompt: "Pflanzenname",
+      },
+      gartentagebuch: {
+        title_date_function:  cbkCalcDateTitle,
+        title_before_date: "Garten ",
+        page: { prevlink: cbkPrevDateLink, nextlink: cbkNextDateLink, },
+        folders: ["Gartentagebuch"],
+      },
+      lesetagebuch:   {
+        title_date_function:  cbkCalcDateTitle,
+        title_before_date: "Lesetagebucheintrag ",
+        page: { prevlink: cbkPrevDateLink, nextlink: cbkNextDateLink,
+          firstline: "## ArticleTitle\n[ntvzdf]link\n\n",
+        },
+        folders: ["Lesetagebuch"],
+      },
+      unbedacht:      {
+        date_created_date_format:"dddd, D. MMMM YYYY, H:mm:ss",
+        title_date_format: "YY-MM-DD",
+        title_date_function:  cbkCalcDateTitle,
+        title_before_date: "Unbedacht ",
+        page: { prevlink: cbkPrevDateLink, nextlink: cbkNextDateLink, },
+        folders: ["Unbedacht"],
+        frontmatter: { private: true, },
+      },
+      diary:          {
+        title_date_function:  cbkCalcDateTitle,
+        title_date_format: "YYYY-MM-DD",
+        page: { prevlink: cbkPrevDateLink, nextlink: cbkNextDateLink, },
+        folders: ["Diary", "temp"],
+        frontmatter: { private: true, },
+      },
+      verwaltung:     {
+        folders: ["Verwaltung"],
+        name_prompt: "Verwaltungsthema",
+        frontmatter: { private: true, },
+      },
+      done:           {
+        title_date_function:  cbkCalcDateTitle,
+        title_before_date: "Heute erledigt ",
+        page: { prevlink: cbkPrevDateLink, nextlink: cbkNextDateLink, },
+        folders: ["Done"],
+        frontmatter: { private: true, },
+      },
+      it:             {
+        folders: ["IT"],
+      },
+      cookbook:       {
+        name_end: "_draft",
+        folders: ["Cookbook"],
+        name_prompt: "Receipe, zuerst wird es als Entwurf erstellt",
+        frontmatter: { publish: true, },
+      },
+      blog:       {
+        name_end: "_draft",
+        folders: ["Blog"],
+        name_prompt: "Allgemeiner Blogeintrag, zuerst wird es als Entwurf erstellt",
+        frontmatter: { publish: true, },
+      },
+      software:       {
+        folders: ["Software"],
+        name_prompt: "Name der Software, die beschrieben wird",
+      },
+      linux:          {
+        page: { pict: "/_/_resources/Linux_mascot_tux_80p.png", pict_width: 50,},
+        folders: ["Linux"],
+      },
+      note:           {
+      },
+  },
+}
+user_configuration = user_configuration_original
+//#endregion USER CONFIGURATION
+//#region EXAMPLE CONFIGURATIONS
+// Entries of the default section are defaults for all sibling sections. Name of
+//    default section does not matter, important is REPEAT: true in __SPEC
+//    (Only one REPEAT is supported)
+// mocstring: "Map of Content" (MOC) Marker at the beginning of a filename.
+//    Is part of the semantic notename. Will not be set by foty, but recognized:
+//    callback functions will remove it.
+// marker: String at the beginning of a filename.
+//    Is not part of semantic notename. Will be set by foty.
+// name_end: String at the end of a filename (before extension).
+//    Is not part of semantic notename. Will be set by foty.
+// title_date_function: Callback function to calculate the filename.
+//    If set as function, it will be used for a new note to set filename.
+//    It uses title_before_date and title_date_format
+// title_before_date: String part before date if title_date_function is used
+// title_date_format: Format of the date part if title_date_function is used
+//    Only recogizes uppercase letters D, M, Y
+//    Only accepts formats expanding to pure numbers
+// folders: Names of (sub)folders in which notes of this type will be placed
+//    Pure folder names are accepted and path parts, e.g. whit two folder types
+//    lettrs:{folders: ["Letters"],} and mylettrs:{folders: ["Private/Letters"],}
+//    lettrs will apply to all folders which contain a pathpart "Letters", e.g.
+//    root/Composers/b/Bach/Letters and root/Letters/from but not to folders
+//    which contain the pathpart "Private/Letters", e.g.  root/Private/Letters
+//    there the folder type mylettrs will apply.
+// tag_pre: String to be prepended to every tag created with cbkFmtTags
+// name_promt: Prompt to be used when asking for notename
+//    Replaces the default prompt hardcoded as NAME_PROMPT in SECTION_TRANSLATE
+// create_same_named_files: Same named files will be created appending a number
+//    Default is false. If set to true linking to prev date file will work wrong.
+// date_created_date_format: Dateformat for cbkFmtCreated, used for date_created
+//    Default if not set is Templaters Default "YYYY-MM-DD"
+// frontmatter: Name does not matter, important is RENDER: false in __SPEC
+//    Has to be same name as in notetypes, to get defaults copied.
+//    Each entry is sent to the template as key value pair before the
+//    key "____" is sent.
+//    aliases: Array of string
+//        Function cbkFmtAlias notename, mocstring removed  and "," replaced with blank
+//    cssclasses: Array of string
+//        Function cbkFmtCssClasses returns notType in array
+//    date_created: Date
+//        cbkFmtCreated returns current date, respecting
+//    position:
+//    private:
+//    publish:
+//    tags: Array of strings
+//       Function cbkFmtTags returns type, first letter uppercase
+//       and "moc" if mocstring is set and filename starts with mocstring.
+//       Each tag in array will be prepended by String in tag_pre.
+// page: Name does not matter, important is RENDER: true in __SPEC
+//    Has to be same name as in notetypes, to get defaults copied.
+//    Each entry is sent to the template as key value pair after the
+//    key "____" is sent.
+//    type:
+//    pict:
+//    pict_width:
+//    prevlink:
+//    nextlink:
+//    firstline:
+//    lastline:
+//prettier-ignore
+let example_configuration1 = {
+  SECTION_NOTETYPES: {
+    note: {
+      marker: "{w}",
+      yaml: {__SPEC: {RENDER: false,}, aliases: cbkAliasOrt, borgia: "Lucrezia", },
+      show: {__SPEC: {RENDER: true,}, firstline: "DAS WORT", fugger: true, },
+    },
+  }
+}
+//user_configuration = example_configuration1
+
+let example_configuration2 = {
+  SECTION_TRANSLATE: { TITLE_NEW_FILE: "Unbenannt",  },
+  SECTION_NOTETYPES: {
+    fueralle: {
+      __SPEC: {REPEAT: true},
+      yaml: {__SPEC: {RENDER: false,},
+        aliases:   {__SPEC:false, DEFAULT: cbkAliasOrt, TYPE: "(Array.<String>|Function)"},
+        borgia:    {__SPEC:false, DEFAULT: "Lucrezia", TYPE: "String", },
+      },
+      show: { __SPEC: {RENDER: true,},
+        firstline: {__SPEC:false, DEFAULT: "DAS WORT", TYPE: "String",},
+        fugger:    {__SPEC:false, DEFAULT: true, TYPE: "Boolean",},
+      },
+    },
+    alt: { folders: ["alt", "antik"], show: { lastline: "ALT", type:"alt"} },
+    note: { marker: "{w}", folders: ["temp"], show: { type:"note"} },
+  }
+}
+//user_configuration = example_configuration2
+
+let example_configuration3 = {
+  SECTION_TRANSLATE: { TITLE_NEW_FILE: "Unbenannt",  },
+  SECTION_NOTETYPES: {
+    defaults: {
+      __SPEC: {REPEAT: true},
+      yaml: {__SPEC: {RENDER: false,},
+        publish:          {__SPEC:false, DEFAULT: true, TYPE: "Boolean", },
+      },
+      show: { __SPEC: {RENDER: true,},
+        type:      {__SPEC:false, DEFAULT: cbkNoteType, TYPE: "(String|Function)",},
+        firstline: {__SPEC:false, DEFAULT: "First Line", TYPE: "String",},
+        lastline: {__SPEC:false, DEFAULT: "##Footnotes", TYPE: "String",},
+      },
+    },
+    book: { folders: ["book"], },
+    test: { folders: ["test"], yaml: { publish: false, }, },
+  }
+}
+//user_configuration = example_configuration3
+//#endregion EXAMPLE CONFIGURATIONS
+
+//#region SCHULE CONFIGURATIONS
+// Eine erweiterte Konfiguration, die die neuen Features:
+// 1) Foldertype mit Pfad und
+// 2) Kommunikation zwischen den Callback Funktionen.
+// verwendet.
+//
+// zu 1) Neue Notizen in XXXStutiis/Mitschriften werden mit dem Foldertype
+// stuttiismitschrift erstellt und neue Notizen in allen anderen Verzeichnissen,
+// die "Mitschriften" als Pfadbestandteil enthalten mit dem Foldertype
+// werkstattmitschrift. Die Notizen haben unterschiedliche YAML.
+//
+// zu 2) Die Callbackfunktionen haben nun einen optionalen 6. Paramter, ein
+// Objekt, in das sie Eigenschaften schreiben können oder die lesen können, die
+// andere Callback Funktionen gesetzt haben.
+// Die title_date_function cbkAskGoogleForTitle erfrägt von google books
+// eine Liste von bis zu 30 Büchern zu den vom Nutzer gegebenen Suchangaben. Der
+// Nutzer wählt davon ein Buch aus. Aus den Werten dieses ausgewählten Buches
+// sollen später in verschiedenen Callback Funktionen verschiedene YAML Einträge
+// gebildet werden. All diese Werte trägt cbkAskGoogleForTitle als Properties
+// in den 6. Parameter ein. Die anderen Callback Funktionen cbkBuchTitel,
+// cbkBuchAutor, cbkBuchVerlag lesen die Information, die sie brauchen aus
+// dem Objekt und übergeben sie ans YAML.
+// Anmerkung: Dieser Parameter ist immer da, auch wenn nicht alle Funktionen ihn
+// angeben. In Javascript kann man Parameter, die man nicht braucht weglassen.
+let schule_configuration = {
+  // General section has to be the first section
+  SECTION_GENERAL: {
+    LANGUAGE: "de", // hardcoded:FALLBACK_LANGUAGE "en"
+  },
+  SECTION_TRANSLATE: {
+    TITLE_NEW_FILE:      [ ["en", "Untitled"], ["de", "Unbenannt"] ],
+  },
+  SECTION_NOTETYPES: {
+    __SPEC: {DEFAULT: "note"},
+    defaults: {
+      __SPEC: {REPEAT: true},
+      mocstring:          {__SPEC:false, DEFAULT:"-",TYPE:"String", },
+      schoolyaml: {__SPEC: {RENDER: false,},
+                          // returns Name of the note type
+        cssclasses:       {__SPEC:false, DEFAULT: cbkFmtCssClasses, TYPE: "(Array.<String>|Function)"},
+        date_created:     {__SPEC:false, DEFAULT: cbkFmtCreated, TYPE: "(Date|Function)", },
+        // /* schule_public */  author:           {__SPEC:false, DEFAULT: "", TYPE: "String", },
+        /* schule_private */ author:           {__SPEC:false, DEFAULT: "Ueberphilosophy", TYPE: "String", },
+        publish:          {__SPEC:false, DEFAULT: true, TYPE: "Boolean", },
+        tags:             {__SPEC:false, DEFAULT: "[]", TYPE: "(String|Array.<String>|Function)",},
+      },
+      schoolshow: { __SPEC: {RENDER: true,},
+        type:             {__SPEC:false, DEFAULT: cbkNoteType, TYPE: "(String|Function)",},
+        prevlink:         {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
+        nextlink:         {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
+        scriptline:       {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
+        firstline:        {__SPEC:false, DEFAULT: cbkNoteName, TYPE: "(String|Function)",},
+        sndline:          {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
+        thrdline:         {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
+        lastline:         {__SPEC:false, DEFAULT: cbkFmtLastLine, TYPE: "(String|Function)",},
+      },
+    },
+    note:                 { // note
+      schoolyaml: { },
+      schoolshow: { },
+    },
+    diary:                { // diary
+      folders: ["Diary", ],
+      title_date_function:  cbkCalcDateTitle,
+      title_date_format: "YYYY-MM-DD",
+      schoolyaml: { publish: false, },
+      schoolshow: {
+        prevlink:  cbkPrevDateLink,
+        nextlink:  cbkNextDateLink,
+        firstline: cbkNoteName,
+        sndline:   "## ",
+      },
+    },
+    material:             { // foldernote, catalog, material
+      folders: ["Materialien", ],
+      name_prompt: "Titel_der_Vorlesung_Jahr_Institut_Speaker",
+      schoolyaml: {
+        cssclasses:   cbkMaterialCssClasses,
+        date_created: cbkMaterialDateCreated,
+        publish:      cbkMaterialPublish,
+        tags:         cbkMaterialTags,
+        ddckey:       cbkMaterialDdcKey,
+        media:        cbkMaterialMedia,
+        author:       cbkMaterialAuthor,
+      },
+      schoolshow: {
+        scriptline: "```dataviewjs\ndv.executeJs(await dv.io.load(\"Materialien/breadcrumbs.js\"));\n```",
+        sndline:     cbkMaterialSndLine,
+        thrdline:    cbkMaterialThrdLine,
+        fourthline:  cbkMaterialFourthLine,
+        fifthline:   cbkMaterialFifthLine,
+        lastline:    cbkMaterialLastLine,
+      },
+    },
+    autor:                { // autor
+      folders: ["Autoren",],
+      name_prompt: "Autornachname",
+      name_end: " Quellen",
+      schoolyaml: {
+        ddckey:  {__SPEC:false, VALUE: "", TYPE: "Number", },
+        gndkey:  {__SPEC:false, VALUE: "", TYPE: "Number", },
+        gndlink: {__SPEC:false, VALUE: "", TYPE: "String", },
+        tags:    cbkAutorTag,
+      },
+      schoolshow: {
+        scriptline: "```dataviewjs\ndv.executeJs(await dv.io.load(\"Materialien/breadcrumbs.js\"));\n```\n",
+        firstline: cbkNoteName,
+        sndline:  cbkTimeLine,
+      },
+    },
+    autorsek:             { // sekundaer
+      folders: ["Autoren-Sekundaer",],
+      name_prompt: "Autornachname",
+      name_end: " Sekundaer",
+      schoolyaml: {
+        cssclasses: "sekundaer",
+        tags:    cbkAutorTag,
+      },
+      schoolshow: {
+        scriptline: "```dataviewjs\ndv.executeJs(await dv.io.load(\"Materialien/breadcrumbs.js\"));\n```\n",
+        firstline: cbkSekundaerName,
+      },
+    },
+    feld:                 { // feld
+      folders: ["Feld"],
+      schoolyaml: {
+        publish: false,
+      },
+      schoolshow: {
+        scriptline: cbkScriptLineFeld,
+        firstline: cbkFrstLineFeld,
+        sndline:   cbkSndLineFeld,
+        thrdline:  cbkThrdLineFeld,
+        lastline:  cbkFmtLastLine,
+      },
+    },
+    stutiis:              { // studies
+      // XXXstutiis/ ist die öffentliche Version von Werkstatt/
+      // Vor der Veröffentlichung wird (priv) Werkstatt/ als .Werkstatt/ versteckt
+      // und XXXstutiis/ zu Werkstatt/ umbenannt
+      folders: ["XXXstutiis"],
+      schoolyaml: {
+        date_created: "",
+        author: "",
+        cssclasses: "studies",
+        publish: false,
+      },
+    },
+    stutiismitschrift:    { // studies @
+      folders: ["XXXstutiis/Mitschriften"],
+      marker: "@",
+      name_prompt: "Exakter Titel der Veranstaltung: Titel_der_Vorlesung_Jahr_Institut_Speaker",
+      schoolyaml: {
+        date_created: "",
+        author: "",
+        cssclasses: "studies",
+        publish: false,
+      },
+      schoolshow: {
+        firstline: "Mitschrift",
+        sndline:   cbkSndLineMitschrift,
+        thrdline:  "## Offen",
+      },
+    },
+    werkstattmitschrift : { // private: werkstatt @, public: studies @
+      folders: ["Mitschriften"],
+      marker: "@",
+      name_prompt: "Exakter Titel der Veranstaltung: Titel_der_Vorlesung_Jahr_Institut_Speaker",
+      schoolyaml: {
+        // /* schule_public */  date_created: "",
+        // /* schule_public */  cssclasses: "studies",
+        /* schule_private */ cssclasses: "werkstatt",
+        publish: false,
+      },
+      schoolshow: {
+        firstline: "Mitschrift",
+        sndline:   cbkSndLineMitschrift,
+        thrdline:  "## Offen",
+      },
+    },
+    audio:                { // audio {a}
+      folders: ["Werkstatt"],
+      marker: "{a}",
+      name_prompt: "OPTIONAL Podcast ODER Reihe - Autornachname - Audiotitel",
+    },
+    buch:                 { // buch {b}
+      folders: ["Werkstatt"],
+      marker: "{b}",
+      name_prompt: "Autornachname - Buchtitel",
+      title_date_function: cbkAskGoogleForTitle,
+      schoolyaml: {
+        tags: cbkBookAliasAsTag,
+        aliases:  cbkBookAlias,
+        buchtitel: cbkBuchTitel,
+        buchuntertitel: cbkBuchUntertitel,
+        buchautor: cbkBuchAutor,
+        buchautorv: cbkBuchAutorv,
+        buchdatum: cbkBuchDatum,
+        buchverlag: cbkBuchVerlag,
+        buchseiten: cbkBuchSeiten,
+        buchsprache: cbkBuchSprache,
+        buchisbn: cbkBuchIsbn,
+        buchisbn13: cbkBuchIsbn13,
+        buchebook: cbkBuchEbook,
+        // ungelesen, gelesen, nochmal, teilweise, aktuell, egal
+        buchstatus: [
+          "egal",
+        ],
+        xbuchstatus: [
+          "gelesen",
+          "aktuell",
+          "teilweise",
+          "nochmal",
+          "ungelesen",
+        ],
+      }
+    },
+    exzerpt:              { // exzerpt $
+      folders: ["Werkstatt"],
+      marker: "$",
+      name_prompt: "Autornachname - Buchtitel",
+    },
+    ort:                  { // ort &
+      folders: ["Werkstatt"],
+      marker: "&",
+      name_prompt: "Ortsname, Land",
+      schoolyaml: {
+        aliases: cbkFmtOneAlias,
+        gndkey:  {__SPEC:false, VALUE: "", TYPE: "Number", },
+        gndlink: {__SPEC:false, VALUE: "", TYPE: "String", },
+      },
+    },
+    person:               { // person =
+      folders: ["Werkstatt"],
+      marker: "=",
+      name_prompt: "Personnachname, Personvorname OPTIONAL , Geburtsdatum",
+      schoolyaml: {
+        aliases: cbkFmtOneAliasSwitch,
+        gndkey:  {__SPEC:false, VALUE: "", TYPE: "Number", },
+        gndlink: {__SPEC:false, VALUE: "", TYPE: "String", },
+      },
+      schoolshow: {
+        pict: "teacher-295387_640-pixabay_2026-01-07.png", 
+        pict_width: 100,
+        firstline: cbkHeaderPerson,
+      }
+    },
+    randnotizen:           { // randnotizen @
+      folders: ["Werkstatt", "Buchmitschriften"],
+      marker: "@",
+      name_prompt: "Autornachname - Buchtitel",
+    },
+    video:                { // video {v}
+      folders: ["Werkstatt"],
+      marker: "{v}",
+      name_prompt: "OPTIONAL Reihe - OPTIONAL Autornachname - Videotitel",
+    },
+    web:                  { // web {w}
+      folders: ["Werkstatt"],
+      marker: "{w}",
+      name_prompt: "OPTIONAL Autor - Webseitentitel - OPTIONAL Datum",
+    },
+    zitat:                { // zitat °
+      folders: ["Werkstatt"],
+      marker: "°",
+      name_prompt: "Titel Autornachname",
+    },
+    zitate:               { // zitate °°
+      folders: ["Werkstatt"],
+      marker: "°°",
+      name_prompt: "Titel Autornachname",
+    },
+  },
+}
+user_configuration = schule_configuration
+//#endregion SCHULE CONFIGURATIONS
+
 //#region globals and externals
 var GLOBAL_SYMBOL_COUNTER = 0
 /**
@@ -1228,19 +1278,6 @@ var GLOBAL_SYMBOL_COUNTER = 0
  * @external Error
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error|Error&#x2348;}
  */
-
-/** Dialog return codes for functions which call dialogs.
- * <p>
- * The templater dialogs do not return a status, they return the value given by
- * user or, on Cancel, no value
- * <p>
- * Functions may return a {@link Dialog} code as status and the value on other ways
- * @enum {String}
- */
-const Dialog = {
-  Ok: "Ok",
-  Cancel: "Cancel",
-}
 
 // TypesWorker
 const TYPES_WORKER_KEY = "SECTION_NOTETYPES"
@@ -1280,6 +1317,8 @@ const GLOBAL_REPEAT_DEFAULT = false
 
 //  #region Colors
 /** Color, to be used without quotation marks during development. */
+const white = "white"
+/** Color, to be used without quotation marks during development. */
 const black = "black"
 /** Color, to be used without quotation marks during development. */
 const cyan = "cyan"
@@ -1304,25 +1343,26 @@ const gray = "silver"
 //#region debug, error and test
 
 /** For debugging purpose.
- * <p>
+ *
  * Function {@link dbg} only prints out, if {@link DEBUG} is on.<br>
  * dbgYAML output of {@link foty|main function} is only shown, if  {@link DEBUG} is on.
  * @type {Boolean}
  */
 var DEBUG = false
 /** For testing purpose. If on, {@link test}s will run when script is executed.
- * <p>
+ *
  * If set, {@link DEBUG} is off
  * @type {Boolean}
  */
 var TESTING = false
 if (TESTING) DEBUG = false
 /** For checking error output.
- * <p>
+ *
  * If set, all exceptions registered in {@link registeredExceptions}  are triggered and
  * their error output is written to current node.
- * <p>
+ *
  * If set, {@link DEBUG} and {@link TESTING} are off
+ * @global
  * @type {Boolean}
  */
 var CHECK_ERROR_OUTPUT = false
@@ -1366,7 +1406,7 @@ function test(outputObj) {
 }
 
 /** Returns string with key-value pairs of {@link inp}s properties.
- * <p>
+ *
  * Does not recurse in properties of a value.
  * @param {Object} inp
  * @returns {String}
@@ -1427,7 +1467,7 @@ function areEqual(arg1, arg2, lv = 0) {
 }
 
 /** Logs all parameters colored to console, if {@link DEBUG} is set to true.
- * <p>
+ *
  * The background of output will be set to 'LightSkyBlue'.
  * @param  {...*} strs
  */
@@ -1478,7 +1518,7 @@ function aut(str, b = "yellow", c = "red") {
   }
 }
 /** Logs all parameters red on yellow to console.
- * <p>
+ *
  * colors are not configurable as they are in {@link aut}
  * @param {String} str
  * @param  {...String} strs
@@ -1518,7 +1558,7 @@ class FotyError extends Error {
   static #nl = "\n     "
   /**
    * Newline for multi line error messages
-   * <p>
+   *
    * As shorthand {@link NL} can be used.<br>
    * @type {String}
    */
@@ -1534,7 +1574,7 @@ class FotyError extends Error {
 
   /**
    * @classdesc superclass for all foty errors (but not unit test errors).
-   * <p>
+   *
    * Additionally to the parameters for {@link external:Error}
    * <code>FotyError</code> receives callers name on construction.
    * @extends external:Error
@@ -1555,14 +1595,14 @@ class FotyError extends Error {
   }
   /**
    * Puts error information formatted to {@link YAML} properties.
-   * <p>
+   *
    * If {@link cnt} is a number, {@link YAML} keys will be created using this
    * number, otherwise fully hardcoded keys will be used.
-   * <p>
+   *
    * The key which's value contains the
    * <code>{@linkcode https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/message|message&#x2348;}</code>
    * is returned.
-   *<p>
+   *
    * <b>Usage of cnt</b>
    * Frontmatter output to current note works with 'key: value'.<br>
    * In production mode no cnt argument should be given. A short key for e.name
@@ -1570,7 +1610,7 @@ class FotyError extends Error {
    * In every call always the same keys are used. This means, that only the last
    * message is contained in YAML. (In production mode this is supposed to be the
    * first and only one)
-   *<p>
+   *
    * In some testing cases an every time different cnt argument can be given.
    * Short keys are created in dependance of cnt and appended to YAML. This means,
    * that YAML can contain more than one error message. In this case a separator
@@ -1594,11 +1634,11 @@ class FotyError extends Error {
   }
   /**
    * Puts error information formatted to {@link YAML} properties.
-   * <p>
+   *
    * This static variant of {@link FotyError#errOut|FotyError.errOut} can be used
    * for output of non FotyErrors. They will be formatted same way as FotyError instance
    * errors.
-   * <p>
+   *
    * The key which's value contains the <code>{@linkcode https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/message|message&#x2348;}</code>
    * of {@link e} is returned.
    * @param {Error} e
@@ -1621,7 +1661,7 @@ class FotyError extends Error {
   }
   /**
    * Creates and returns key for this instances name in dependence of value of {@link cnt}.
-   * <p>
+   *
    * Can be overridden by subclasses.
    * @param {(undefined|Number)} cnt
    * @returns {String}
@@ -1678,7 +1718,7 @@ class SettingError extends FotyError {
   usrMsg = ""
   /**
    * @classdesc User error thrown from setting tree.
-   * <p>
+   *
    * Some of the errors from setting tree for sure can only occur if entries in
    * setting input are wrong. Those are user errors. Using the 2nd parameter
    * a user specific message can be given.
@@ -1720,7 +1760,7 @@ class SettingError extends FotyError {
 
 class CodingError extends FotyError {
   /** @classdesc Programming error.
-   * <p>
+   *
    * Some errors only can occur if code is wrong. If this is for sure,
    * CodingError should be thrown.
    * @extends FotyError
@@ -1748,8 +1788,11 @@ class CodingError extends FotyError {
 
 class TestSuite {
   //#region member variables
-  static ok = "\u2713"
-  static nok = "\u2718"
+  //static ok = "\u2713"
+  //static nok = "\u2718"
+  static ok = "✅"
+  static nok = "❌"
+
   static #totalSuites = 0
   static #totalTests = 0
   static #totalCases = 0
@@ -1796,12 +1839,12 @@ class TestSuite {
     if (this.#failed === 0) {
       this.#praut(
         this.s,
-        `Suite "${this.#name}": ${this.#succeeded} ${suc_Str} succeeded`
+        `Suite "${this.#name}":${this.#succeeded} ${suc_Str} succeeded`
       )
     } else {
       this.#praut(
         this.f,
-        `Suite "${this.#name}": ${this.#failed} ${failStr} failed, ${
+        `Suite "${this.#name}":${this.#failed} ${failStr} failed, ${
           this.#succeeded
         } succeeded`
       )
@@ -1992,7 +2035,7 @@ class TestSuite {
      * d = "details"
      * e = "none"
      * z = "summary" */
-    let nl_indent = "\n        "
+    let nl_indent = "\n\n        "
     if (key != this.s && key != this.f && key != this.d) {
       let errStr = "%c" + key
       console.log(errStr, "background: rgba(255, 99, 71, 0.5)")
@@ -2021,8 +2064,9 @@ class TestSuite {
       // "details" or "success"
       this.o[key] = this.o[key] + nl_indent + str
     }
+    // No Space after colon, otherwise YAMLParserError
     // prettier-ignore
-    this.o[this.z] = `Suites: ${TestSuite.#totalSuites} | Tests: ${TestSuite.#totalTests} | Cases: ${TestSuite.#totalCases}`
+    this.o[this.z] = `Suites:${TestSuite.#totalSuites} | Tests:${TestSuite.#totalTests} | Cases:${TestSuite.#totalCases}`
   }
 }
 /**
@@ -2330,7 +2374,7 @@ registeredTests.push(Dispatcher.test)
  * @returns {Boolean}
  */
 function cbkIsObjectNotNullNotArray(v, gene) {
-  return typeof v === "object" && v != undefined && !Array.isArray(v)
+  return typeof v === "object" && v !== null && !Array.isArray(v)
 }
 /** {@link GeneCallback}, returns whether {@link v} is Null
  * @type {GeneCallback}
@@ -2339,7 +2383,7 @@ function cbkIsObjectNotNullNotArray(v, gene) {
  * @returns {Boolean}
  */
 function cbkIsNull(v, gene) {
-  return typeof v === "object" && v == undefined && v !== undefined
+  return typeof v === "object" && v === null
 }
 /** {@link GeneCallback}, returns whether {@link v} is an Array
  * @type {GeneCallback}
@@ -2401,20 +2445,21 @@ class Gene {
 
   /**
    * @classdesc Gene is type used in this application.
-   * <p>
+   *
    * Every gene has a {@link GeneCallback} function associated with it. The default callback
    * function is '
    * <code>{@linkcode https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/typeof|typeof&#x2348;}</code>
    * variable === {@link Gene#ident|Gene.ident}' . {@link Gene#is} calls this callback, comparing
    * variable to check against ident of {@link Gene}.
-   * <p>
+   *
    * <b>Why this name? </b>
+   *
    * Many types of types we have to deal with. Therefore another name for 'allowed
    * types' was searched for. It should be short, have a meaning near to
    * 'very basic' and it should reasonable not be used further in the code, so
    * that name is replaceable throughout whole file, if another one would be
    * chosen.
-   * <p>
+   *
    * The name has a flaw though: A real gene is something, a gene here is a
    * something definition. In other words: A real gene can be compared to another
    * real gene, e.g whether they are equal or which of them is longer. If you want
@@ -2545,20 +2590,20 @@ class GenePool {
   /**
    * @classdesc Collection of  Genes.
    *
-   * <p>
+   *
    * Stores  {@link Gene}s. The default {@link GeneCallback|callback} function for newly created
    * {@link Gene}s is '{@link cbkInstanceOf}'. (Whereas the default {@link GeneCallback}|callback)
    * function for plain {@link Gene}s is '{@link cbkTypeOf}').
    * '.
    * @constructor
    * @description Creates new instance of {@link GenePool}.
-   * <p>
+   *
    * If not set to an other value, the default {@link GeneCallback|callback} function is {@link cbkInstanceOf}.
-   * <p>
+   *
    * If first parameter is a function, it becomes the default {@link GeneCallback|callback} function.
    * All other parameters (including the first, if not a function) are registered as {@link Gene}s
    * with the default {@link GeneCallback|callback} function set as {@link GeneCallback|callback} function .
-   * <p>
+   *
    * should never throw
    * @param  {...*} params
    */
@@ -2571,10 +2616,10 @@ class GenePool {
 
   /**
    * Adds {@link ident} as new Gene with {@link cbk} as {@link GeneCallback|callback} function.
-   * <p>
+   *
    * If {@link cbk} is undefined, the newly created {@link Gene} gets default {@link GeneCallback|callback} function
    * as {@link GeneCallback|callback} function
-   * <p>
+   *
    * The newly created {@link Gene} is returned. <br>
    * If {@link ident} is already set, it is not changed, but returned at it is.
    * @param {*} ident
@@ -2610,14 +2655,14 @@ class GenePool {
   }
   /**
    * Returns whether {@link v} fulfills {@link ident}s requirements as {@link Gene}.
-   * <p>
+   *
    * Returns false, if {@link ident} is no {@link Gene} of this pool.
-   * <p>
+   *
    * {@link ident}s, which are strings, compounds {@link ident}s are possible:<br>
    * - ({@link ident1}|{@link ident2}|{@link ident3})<br>
    * - Array.&lt;{@link ident1}&gt;<br>
    * - combination of both
-   * <p>
+   *
    * <b>Remark:</b><br>
    * It is not static, because {@link v} is only compared against {@link Gene}s
    * in this {@link GenePool|pool}
@@ -2638,7 +2683,7 @@ class GenePool {
       return this.#genes[ident].is(v)
     }
   }
-  toString() {
+  toDisplayString() {
     return "°°°" + this.constructor.name
   }
 
@@ -2931,7 +2976,7 @@ class Essence extends GenePool {
     return this[Essence.#pre + "IGNORE"]
   }
   /** PARSE essence, inherited
-   * <p>
+   *
    * Only for internal use.
    * If set to false, no Essences will be added. This is the only
    * case, in which no Essences are possible. If used internally, instance has
@@ -2994,8 +3039,8 @@ class Essence extends GenePool {
    * specification key. The hardcoded default of this key is
    * {@link Essence#DEFAULT_HARDCODED_SPEC_KEY|Essence.#DEFAULT_HARDCODED_SPEC_KEY}.
    * On construction a different key can be set.
-   * <p>
-   * <p> There exists a set of predefined tokens.  Tokens can be individual or
+   *
+   * There exists a set of predefined tokens.  Tokens can be individual or
    * inherited.  After initialization of an
    * Essence instance, each token is always there.
    * Either as found in specification section or as
@@ -3006,13 +3051,13 @@ class Essence extends GenePool {
    * has wrong  {@link Gene} it will be {@link Essence#skipped|skipped} and
    * parent token value if inherited or if no parent or individual
    * hardcoded value will be used.
-   * <p>
+   *
    * Essence has to do with two {@link GenePool}s. The one that it is and that it's
    * subclasses will be. The other is the
    * {@link Essence#specificationPool|Essence.specificationPool}.
    * This one it uses to check the specification properties in the literal given
    * to it.
-   * <p>
+   *
    * All known specification properties in the literals specification object
    * are changed to invisible and unremovable properties, the tokens, of this instance,
    * which represents the literal for subclass instances.
@@ -3020,7 +3065,7 @@ class Essence extends GenePool {
    * and unremovable properties. Those can be questioned using static get functions
    * ({@link Essence.getDEFAULT} - {@link Essence.getVALUE})
    * of {@link Essence}
-   * <p>
+   *
    * This class is pure essence. Without filling some {@link Gene}s in
    * {@link Essence#specificationPool|Essence.specificationPool} it only produces
    * default token values.
@@ -3031,7 +3076,7 @@ class Essence extends GenePool {
    * @constructor
    * @description
    * Creates {@link Essence} instance.
-   * <p>
+   *
    * Adds {@link Object}, {@link Gene}, {@link GenePool} and {@link Essence}
    * to its pool as Genes with {@link GeneCallback|callback} {@link cbkInstanceOf}.
    * @param {String} spec_key - no type check, but only implemented for
@@ -3047,12 +3092,12 @@ class Essence extends GenePool {
   }
   /**
    * Creates the tokens.
-   * <p>
+   *
    * Removes {@link Essence#SPEC_KEY|this.SPEC_KEY} property from {@link literal} and
    * removes all <code class="bordered"><a href="#zweitens">
    * specification properties</a> </code> from literal if value of
    * {@link Essence#SPEC_KEY|this.SPEC_KEY} property is not of type <code>Boolean</code>.
-   * <p>
+   *
    * Adds recognized <code class="bordered"><a href="#zweitens">
    * specification properties</a> </code>
    * from {@link literal} as hidden properties (tokens)
@@ -3060,7 +3105,7 @@ class Essence extends GenePool {
    * Adds hidden properties which are not given in {@link literal}
    * with parent value (if inherited) or hardcoded default value
    * to this instance and {@link literal}.
-   * <p>
+   *
    * Values in literal with wrong type (e.g. if value of {@link Essence#IGNORE|IGNORE}
    * is <code>yes</code>) will be skipped and added to {@link skipped}.
    * <p id="zweitens">
@@ -3665,6 +3710,7 @@ class AEssence extends Essence {
   /**
    * @classdesc
    * First superclass in tree, which is foty specific.
+   *
    * @mermaid
    *  classDiagram
    *      GenePool <|-- Essence
@@ -3673,13 +3719,13 @@ class AEssence extends Essence {
    * @constructor
    * @description
    * Creates foty tokens.
-   * <p>
+   *
    * Adds self to its pool with {@link GeneCallback|default callback}}.
    * Adds {@link String}, {@link Number}, {@link Boolean},
    * {@link Function} and {@link Object} with
    * {@link GeneCallback|callback} {@link cbkTypeOfLc}
    * and {@link Date} with {@link GeneCallback|callback} {@link cbkIsDate}.
-   * <p>
+   *
    * Sets {@link Essence#SPEC_KEY|supers SPEC_KEY} to {@link AEssence.SPEC_KEY}
    * and calls {@link Essence#parse|supers parse}, which creates the tokens.
    * @param {(Undefined|Object)} literal
@@ -4010,7 +4056,7 @@ class BreadCrumbs extends AEssence {
    * @constructor
    * @description
    * Creates new BreadCrumbs instance.
-   * <p>
+   *
    * Adds {@link BreadCrumbs}
    * to its pool as Gene with {@link GeneCallback|callback} {@link cbkInstanceOf}.<br>
    * Adds <code>undefined</code>, <code>boolean</code>, <code>number</code>,
@@ -4052,7 +4098,8 @@ class BreadCrumbs extends AEssence {
     this.throwIfNotOfType(name, "name", "(string|symbol)")
     if (typeof name === "symbol")
       this.#name = "_Symbol_" + GLOBAL_SYMBOL_COUNTER++
-    this.#name = name
+    else
+      this.#name = name
     if (!this.isA(literal, "undefined"))
       this.throwIfNotOfType(literal, "literal", "object")
     this.#literal = literal
@@ -4076,7 +4123,7 @@ Skipped values are: `
    * @returns {String} string containing class name of deepest subclass and key
    *          as given in BreadCrumbs constructor.
    */
-  toString() {
+  toDisplayString() {
     if (typeof this.#name === "string")
       return "°°°" + this.constructor.name + " " + this.#name
     else if (typeof this.#name === "symbol")
@@ -4111,7 +4158,7 @@ Skipped values are: `
 
   /**
    * Throws if {@link val} is strictly undefined (null is defined).
-   *<p>
+   *
    * Does not throw on parameter type errors.
    * @param {*} val
    * @param {String} vName - becomes part of Error message
@@ -4141,7 +4188,7 @@ Skipped values are: `
 
   /**
    * Throws if val is not of type or compound type, if type is defined with string.
-   * <p>
+   *
    * Does not throw on parameters type errors.
    * @param {*} val
    * @param {String} vName
@@ -4183,7 +4230,7 @@ Skipped values are: `
       _.run(getterRootTest)
       _.run(constructorTest)
       _.run(isATest)
-      _.run(toStringTest)
+      _.run(toDisplayStringTest)
       _.run(toBreadCrumbsTest)
       _.run(throwIfUndefinedTest)
       _.run(throwIfNotOfTypeTest)
@@ -4311,11 +4358,11 @@ Skipped values are: `
       _.bassert(55,bc.isA(new BreadCrumbs(un, "BreadCrumbs:NameIsATest"),Object),"BreadCrumbs instance should be a Object")
 
     }
-    function toStringTest() {
-      let str = new BreadCrumbs(undefined, "BrRrEadCrumbs:my name11").toString()
+    function toDisplayStringTest() {
+      let str = new BreadCrumbs(undefined, "BrRrEadCrumbs:my name11").toDisplayString()
       _.bassert(1,str.includes("BrRrEadCrumbs:my name11"),"result does not contain name given on construction")
       _.bassert(2,str.includes("BreadCrumbs"),"result does not contain class name")
-      str = new BreadCrumbs({},"BreaDCrumbs:myName20").toString()
+      str = new BreadCrumbs({},"BreaDCrumbs:myName20").toDisplayString()
       _.bassert(3,str.includes("BreaDCrumbs:myName20"),"result does not contain name given on construction")
       _.bassert(4,str.includes("BreadCrumbs"),"result does not contain class name")
     }
@@ -4405,15 +4452,69 @@ class Setting extends BreadCrumbs {
     return this.#children
   }
   /**
+   * Returns deep copy of parameter {@link literal}
+   *
+   * @param {*} literal - javascript variable of any type to be deep copied
+   * @returns {*}
+   */
+  static deepCopy(literal) {
+    let newLiteral
+    let type = typeof(literal)
+    if(type === "object") {
+      if(literal === null) {
+        type = "null"
+      } else if (Array.isArray(literal)) {
+        type = "array"
+      }
+    }
+    if(type !== "object") {
+      switch(type) {
+      case "array":
+        newLiteral = [];
+        literal.forEach(ele => {
+          newLiteral.push(Setting.deepCopy(ele))
+        });
+        break
+      case "function":
+      case "symbol":
+      case "null":
+      case "undefined":
+      case "boolean":
+      case "number":
+      case "bigint":
+      case "string":
+        newLiteral = literal
+        break
+      case "object":
+        throw new TypeError("Dies kann nicht passieren")
+        break
+      default:
+        throw new TypeError("Dies kann nur passieren, wenn JavaScript weitere Typen erhält")
+        break
+      }
+    } else {
+      newLiteral = {}
+      if(Object.keys(Object.getOwnPropertyDescriptors(literal)).length !==
+        Object.keys(literal).length) {
+        //;vaut("Setting:deepCopy",  "literal has Symbol properties", green, black)
+      }
+      for (const [k, v] of Object.entries(literal)) {
+        newLiteral[k] = Setting.deepCopy(v)
+      }
+    }
+    return newLiteral
+  }
+
+  /**
    * @classdesc setting parser; traverses deep literal to flat output
-   * <p>
+   *
    * Setting is the only subclass which should be constructed from outside, with
    * only literal given as argument.
-   * <p>
+   *
    * It calls the workers and traverses given literal to flat output; thereby
    * respecting worker configuration rules and removing worker literals from
    * output.
-   * <p>
+   *
    * <b>Workflow and requisites</b><br>
    * BreadCrumbs:<br>
    * - Adds undefined, boolean, number, bigint, string, symbol and function
@@ -4422,19 +4523,19 @@ class Setting extends BreadCrumbs {
    * - Adds object with callback cbkIsObjectNotNullNotArray,
    * null with callback cbkIsNull and
    * array with callback cbkIsNull to this pool.
-   *<p>
+   *
    * AEssence:<br>
    * - Adds "String", "Number", "Boolean", "Function" and "Object" to user pool
    *   as Genes with callback cbkTypeOfLc.<br>
    * - Adds "Date" to user pool as Genes with callback cbkIsDate.
-   *<p>
+   *
    * Setting:<br>
    *  #globalType =
    * "(Number|String|Boolean|Array.<Number>|Array.<String>|Array.<Boolean>)"
-   *<p>
+   *
    * <i>In German, id do not understand it in English. I suppose, other people
    * would not understand it in my English, so not translated. </i>
-   * <p>
+   *
    * AEssence:<br>
    * Für Nodes: (bedeutet: der Wert von __SPEC ist nicht Boolean)<br>
    *     Vergleicht den Typ des Wertes des SPEC_Eintrags im __SPEC Node mit
@@ -4454,7 +4555,7 @@ class Setting extends BreadCrumbs {
    *     Verwendet den ParentNode (den Node, der __SPEC enthält) als __SPEC
    *     Node.<br>
    *     Sets FLAT to true
-   *<p>
+   *
    * Setting:<br>
    * Für Nodes: (bedeutet: der Wert von __SPEC ist nicht Boolean)<br>
    *    Wie AEssence für Nodes.<br>
@@ -4470,13 +4571,29 @@ class Setting extends BreadCrumbs {
    *    Für reine Atoms: (bedeutet: der Wert ist kein Object)<br>
    *       erzeugt ein spezifiziertes Atom mit VALUE: Wert und __SPEC true
    *       (damit wird TYPE zu #globalType)
-   *<p>
+   *
    *    Dann wie AEssence für Atoms.<br>
    *    Danach wird VALUE aus der erzeugten AEssence zum Wert des Atoms.<br>
    * @mermaid
+   * ---
+   * title: BreadCrumbs
+   * config:
+   *   theme: default
+   *   xatheme: default
+   *   xbtheme: neutral
+   *   xctheme: dark
+   *   xdtheme: forest
+   *   xetheme: base
+   *   xxtheme: baseIsTheOnlyThemeThatCanBeModified
+   *   layout: elk
+   *   xxlayout: dagre
+   *   xylayout: tidy-tree
+   *   class:
+   *     hideEmptyMembersBox: true
+   * ---
    *  classDiagram
    *      GenePool <|-- Essence
-   *      Essence <|-- BreadCrumbs
+   *      Essence <|-- AEssence
    *      AEssence <|-- BreadCrumbs
    *      BreadCrumbs <|-- Setting
    * @extends BreadCrumbs
@@ -4485,12 +4602,12 @@ class Setting extends BreadCrumbs {
    * Constructs a new Setting instance.
    * Adds {@link Setting}
    * to its pool as Gene with {@link GeneCallback|callback} {@link cbkInstanceOf}.
-   * <p>
+   *
    * Recurses into {@link Object} entries and creates {@link Setting} instances
    * for them with <code>this</code> instance as parent and entry key as {@link key}.
-   * <p>
+   *
    * Creates {@link AEssence} instances for all other entries.
-   * <p>
+   *
    * Throws on wrong parameter types
    * @param {Object} literal
    * @param {(Undefined|String|Symbol)} key - if undefined, becomes root key
@@ -4602,13 +4719,13 @@ class Setting extends BreadCrumbs {
   /**
    * Returns {@link AEssence} for <code>atomic literal</code>,
    * <code>undefined</code> for <code>node literal</code>
-   * <p>
+   *
    * If value of {@link this.#SPEC_KEY|__SPEC} property
    * of {@link literal}[{@link key}] is
    * <code>undefined</code> or an {@link Object}
    * {@link literal} is <code>node literal</code>,
    * in any other case it is <code>atomic literal</code>
-   * <p>
+   *
    * For atomic literals:<br>
    * If value of {@link this.#SPEC_KEY|__SPEC} is true,
    * {@link AEssence#TYPE|TYPE} property with value  {@link type}
@@ -4618,9 +4735,9 @@ class Setting extends BreadCrumbs {
    * is created with <code>this</code> instance as parent.<br>
    * Value of {@link literal}[{@link key}] becomes {@link AEssence#VALUE|VALUE} of
    * this newly created instance.
-   * <p>
+   *
    * Returns <code>undefined</code> on wrong parameter types
-   * <p><b>Simply said:</b> Changes value of {@link literal}[{@link key}]
+   *<b>Simply said:</b> Changes value of {@link literal}[{@link key}]
    * to given {@link AEssence#VALUE|VALUE}.
    * @param {Object} literal
    * @param {*} key
@@ -4743,6 +4860,54 @@ class Setting extends BreadCrumbs {
     return answ
   }
 
+  /** returns the settings object as string
+   *
+   */
+  toPlainString(indent="\n") {
+    let plainString = ""
+    let sectionKeys = Object.keys(this.#works)
+    for(const key in this.#works) {
+      if(this.#works.hasOwnProperty(key)) {
+        plainString += indent + key + ": "
+        plainString += "{"
+        plainString += this.#works[key].toPlainString(indent+"  ")
+        plainString += indent + "}"
+        plainString += ","
+      }
+    }
+    for (const [key, value] of this) {
+      plainString+= indent + key + ": "
+      if (value.FLAT) {
+        plainString+= Setting.valueString(value.VALUE)
+      } else {
+        plainString+= "{"
+        plainString+=value.toPlainString(indent+"  ")
+        plainString+= indent + "}"
+      }
+      plainString+= ","
+    }
+    return plainString
+  }
+  static valueString(value) {
+    let valueString = ""
+    if (typeof value=== "function") {
+      valueString += value.name
+    } else if (typeof value === "string") {
+      valueString += "\"" + value+"\""
+    } else if (typeof value=== "boolean") {
+      valueString+= value
+    } else if (Array.isArray(value)) {
+      valueString+= "["
+      value.forEach((ele) => {
+        valueString+= Setting.valueString(ele)
+        valueString+= ","
+      })
+      valueString+= "]"
+    } else {
+      valueString+= value
+    }
+    return valueString
+  }
   /** Returns all frontmatter entries of this instance and descendants
    * besides IGNORED ones.
    * Workers are not treated as descendants. Otherwise entries
@@ -4778,6 +4943,22 @@ class Setting extends BreadCrumbs {
     return renderYAML
   }
 
+  /** Returns all general entries of this instance and descendants
+   * besides IGNORED ones.
+   * @returns  {Object.<String.any>}
+   */
+  getGeneralYAML() {
+    let generalYAML = {}
+    for (const [key, value] of this) {
+      if (value.FLAT) {
+        if (value.RENDER == undefined && !value.IGNORE)
+          generalYAML[key] = value.VALUE
+      } else {
+        Object.assign(generalYAML, value.getGeneralYAML())
+      }
+    }
+    return generalYAML
+  }
   /** LOGS all key.VALUE pairs recursive to console
    * Functions are shortenend to String "FUNCTION"
    * @param {Number} depth
@@ -4861,7 +5042,7 @@ class Setting extends BreadCrumbs {
       _.run(setterWorkersTypeForChildrenTest)
       _.run(constructorTest)
       _.run(isATest)
-      _.run(toStringTest)
+      _.run(toDisplayStringTest)
       _.run(iteratorTest)
       _.run(hasTest)
       _.run(atTest)
@@ -4986,11 +5167,11 @@ class Setting extends BreadCrumbs {
       _.bassert(8,!setting1.isA(setting1,Error), "'" + setting1 + "' should not be a " + "Error")
       _.bassert(9,!setting1.isA(setting1,Gene), "'" + setting1 + "' should not be a " + "Gene")
     }
-    function toStringTest() {
+    function toDisplayStringTest() {
       let un
-      let setting1 = new Setting({},"SetTing:toStringTest1",un)
-      _.bassert(1,setting1.toString().includes("toStringTest1"),"result does not contain name string"    )
-      _.bassert(2,setting1.toString().includes("Setting"),"result does not contain class string"    )
+      let setting1 = new Setting({},"SetTing:toDisplayStringTest1",un)
+      _.bassert(1,setting1.toDisplayString().includes("toDisplayStringTest1"),"result does not contain name string"    )
+      _.bassert(2,setting1.toDisplayString().includes("Setting"),"result does not contain class string"    )
     }
     function iteratorTest() {
       /**********************************************************************/{
@@ -5659,7 +5840,7 @@ class GeneralWorker extends Setting {
   /**
    * Returns value of {@link key} or {@link fallback} as caller fallback
    * or undefined if none of them is found
-   * <p>
+   *
    * @param {String} key
    * @param  {...any} fallback
    * @returns {...any}
@@ -5681,7 +5862,7 @@ class GeneralWorker extends Setting {
     if(_ = new TestSuite("GeneralWorker", outputObj)) {
       _.run(constructorTest)
       _.run(isATest)
-      _.run(toStringTest)
+      _.run(toDisplayStringTest)
       _.run(getValueTest)
       _.destruct()
       _ = null
@@ -5728,10 +5909,10 @@ class GeneralWorker extends Setting {
       _.bassert(6,!dlgMan1.isA(dlgMan1,Error), "'" + dlgMan1 + "' should not be a " + "Error")
       _.bassert(7,!dlgMan1.isA(dlgMan1,Gene), "'" + dlgMan1 + "' should not be a " + "Gene")
     }
-    function toStringTest() {
-      let dlgMan1 = new GeneralWorker({},"DlgWrk:toStringTest1",new Setting({},"parent"))
-      _.bassert(1,dlgMan1.toString().includes("toStringTest1"),"result does not contain name string"    )
-      _.bassert(2,dlgMan1.toString().includes("GeneralWorker"),"result does not contain class string"    )
+    function toDisplayStringTest() {
+      let dlgMan1 = new GeneralWorker({},"DlgWrk:toDisplayStringTest1",new Setting({},"parent"))
+      _.bassert(1,dlgMan1.toDisplayString().includes("toDisplayStringTest1"),"result does not contain name string"    )
+      _.bassert(2,dlgMan1.toDisplayString().includes("GeneralWorker"),"result does not contain class string"    )
     }
     function getValueTest() {
       let un
@@ -5832,16 +6013,16 @@ class LocalizationWorker extends Setting {
   /**
    * Returns translated value or value or undefined if {@link key}
    * not found
-   * <p>
+   *
    * The value can be:<br>
    * - a string<br>
    * - an array of two strings<br>
    * - an array of arrays of two strings
-   * <p>
+   *
    * If the value is a string, this is returned
-   * <p>
+   *
    * From a plain array of string the 2nd string is returned.
-   * <p>
+   *
    * The 1st string in a two string array is considered as the language
    * key. If it is equal with language string in {@link params} the 2nd
    * string of this pair is returned. <br>
@@ -5899,7 +6080,7 @@ class LocalizationWorker extends Setting {
     if(_ = new TestSuite("LocalizationWorker", outputObj)) {
       _.run(constructorTest)
       _.run(isATest)
-      _.run(toStringTest)
+      _.run(toDisplayStringTest)
       _.run(getValueTest)
       _.destruct()
       _ = null
@@ -5946,10 +6127,10 @@ class LocalizationWorker extends Setting {
       _.bassert(6,!locMan1.isA(locMan1,Error), "'" + locMan1 + "' should not be a " + "Error")
       _.bassert(7,!locMan1.isA(locMan1,Gene), "'" + locMan1 + "' should not be a " + "Gene")
     }
-    function toStringTest() {
-      let locMan1 = new LocalizationWorker({},"LocWork:toStringTest1",new Setting({},"parent"))
-      _.bassert(1,locMan1.toString().includes("toStringTest1"),"result does not contain name string"    )
-      _.bassert(2,locMan1.toString().includes("LocalizationWorker"),"result does not contain class string"    )
+    function toDisplayStringTest() {
+      let locMan1 = new LocalizationWorker({},"LocWork:toDisplayStringTest1",new Setting({},"parent"))
+      _.bassert(1,locMan1.toDisplayString().includes("toDisplayStringTest1"),"result does not contain name string"    )
+      _.bassert(2,locMan1.toDisplayString().includes("LocalizationWorker"),"result does not contain class string"    )
     }
     function getValueTest() {
       let par = new Setting({},"LocalizationWorker:getValueTest:parent")
@@ -6117,7 +6298,7 @@ class DialogWorker extends Setting {
     if(_ = new TestSuite("DialogWorker", outputObj)) {
       _.run(constructorTest)
       _.run(isATest)
-      _.run(toStringTest)
+      _.run(toDisplayStringTest)
       _.run(getValueTest)
       _.destruct()
       _ = null
@@ -6164,10 +6345,10 @@ class DialogWorker extends Setting {
       _.bassert(6,!dlgMan1.isA(dlgMan1,Error), "'" + dlgMan1 + "' should not be a " + "Error")
       _.bassert(7,!dlgMan1.isA(dlgMan1,Gene), "'" + dlgMan1 + "' should not be a " + "Gene")
     }
-    function toStringTest() {
-      let dlgMan1 = new DialogWorker({},"DlgWrk:toStringTest1",new Setting({},"parent"))
-      _.bassert(1,dlgMan1.toString().includes("toStringTest1"),"result does not contain name string"    )
-      _.bassert(2,dlgMan1.toString().includes("DialogWorker"),"result does not contain class string"    )
+    function toDisplayStringTest() {
+      let dlgMan1 = new DialogWorker({},"DlgWrk:toDisplayStringTest1",new Setting({},"parent"))
+      _.bassert(1,dlgMan1.toDisplayString().includes("toDisplayStringTest1"),"result does not contain name string"    )
+      _.bassert(2,dlgMan1.toDisplayString().includes("DialogWorker"),"result does not contain class string"    )
     }
     function getValueTest() {
       let par = new Setting({},"DialogWorker:getValueTest:parent")
@@ -6232,6 +6413,8 @@ class TypesWorker extends Setting {
   static get workerKey() {
     return TypesWorker.#KEY
   }
+  static #plainStaticString = ""
+  #plainString = ""
 
   /**
    * @classdesc For note types
@@ -6276,8 +6459,11 @@ class TypesWorker extends Setting {
       )
     }
     parent.workersTypeForChildren = TypesWorker.#localType
+    TypesWorker.#toPlainString(literal)
     TypesWorker.#cpRepeatedDefaults(literal)
     super(literal, key, parent)
+    this.#plainString = TypesWorker.#plainStaticString
+    TypesWorker.#plainStaticString = ""
     this.addGene(TypesWorker)
     // literal {(Object)} checked by superclass
     // key {(String|Symbol)} checked by superclass
@@ -6308,6 +6494,28 @@ class TypesWorker extends Setting {
 ===  ${name_x}  =========================================================`,
         pink
       )
+    }
+  }
+  static #toPlainString(literal, indent="\n  ") {
+    let indentToUse=indent
+    for (const [key, value] of Object.entries(literal)) {
+      if(key == AEssence.SPEC_KEY) {
+        indentToUse=" "
+      }
+      TypesWorker.#plainStaticString += indentToUse + key + ": "
+      if (typeof value != "object" ||
+          Object.getOwnPropertyNames(value).length === 0 ||
+          Array.isArray(value)) {
+        TypesWorker.#plainStaticString += Setting.valueString(value)
+      } else {
+        TypesWorker.#plainStaticString += "{"
+        TypesWorker.#toPlainString(value, indentToUse+"  ")
+        TypesWorker.#plainStaticString += indentToUse + "}"
+      }
+      TypesWorker.#plainStaticString += ","
+      if(key == AEssence.SPEC_KEY) {
+        indentToUse=indent
+      }
     }
   }
   static #cpRepeatedDefaults(literal) {
@@ -6363,10 +6571,13 @@ class TypesWorker extends Setting {
       }
   }
   }
+  toPlainString(indent) {
+    return this.#plainString
+  }
   /**
    * Returns value of {@link key} or {@link fallback} as caller fallback
    * or undefined if none of them is found
-   * <p>
+   *
    * @param {String} key
    * @param  {...any} fallback
    * @returns {...any}
@@ -6388,7 +6599,7 @@ class TypesWorker extends Setting {
     if(_ = new TestSuite("TypesWorker", outputObj)) {
       _.run(constructorTest)
       _.run(isATest)
-      _.run(toStringTest)
+      _.run(toDisplayStringTest)
       _.run(getValueTest)
       _.destruct()
       _ = null
@@ -6435,10 +6646,10 @@ class TypesWorker extends Setting {
       _.bassert(6,!typesMan1.isA(typesMan1,Error), "'" + typesMan1 + "' should not be a " + "Error")
       _.bassert(7,!typesMan1.isA(typesMan1,Gene), "'" + typesMan1 + "' should not be a " + "Gene")
     }
-    function toStringTest() {
-      let typesMan1 = new TypesWorker({},"TypMan:toStringTest1",new Setting({},"parent"))
-      _.bassert(1,typesMan1.toString().includes("toStringTest1"),"result does not contain name string"    )
-      _.bassert(2,typesMan1.toString().includes("TypesWorker"),"result does not contain class string"    )
+    function toDisplayStringTest() {
+      let typesMan1 = new TypesWorker({},"TypMan:toDisplayStringTest1",new Setting({},"parent"))
+      _.bassert(1,typesMan1.toDisplayString().includes("toDisplayStringTest1"),"result does not contain name string"    )
+      _.bassert(2,typesMan1.toDisplayString().includes("TypesWorker"),"result does not contain class string"    )
     }
     function getValueTest() {
       let par = new Setting({},"TypesWorker:getValueTest:parent")
@@ -6512,7 +6723,7 @@ class DialogError extends Error {
 class Templater {
   #tp
   #app
-  #gen //general cfg     // LANGUAGE RELATIVE_PATH
+  #gen //general cfg     // LANGUAGE
   #loc //translation cfg // TITLE_NEW_FILE TYPE_PROMPT NAME_PROMPT
   #dlg //dlg cfg         // TYPE_MAX_ENTRIES
   #typ //notetyps cfg    // DEFAULT
@@ -6596,10 +6807,7 @@ class Templater {
       // in Obsidian/Unbedacht: create Unbedacht
       // in Obsidian/temp: show Select Dialog Garten, Diary
 
-      let relative = me.#gen.getValue("RELATIVE_PATH", true)
-      let path_relative = me.#tp.file.path(true)
-      let path_absolute = me.#tp.file.path(false)
-      let noteWithPath = relative ? path_relative : path_absolute
+      let noteWithPath = me.#tp.file.path(true)
       let pathParts = noteWithPath.split("\\")
       if(pathParts.length < 2) {
         pathParts = noteWithPath.split("/")
@@ -6821,7 +7029,7 @@ class Templater {
 }
 //#endregion Templater
 /** exported function.
- * <p>
+ *
  * Name does not matter for templater, but if named 'main' interferes with jsdoc.
  * @param {Object} tp - templater object
  * @param {Object} app - obsidian api object
@@ -6871,7 +7079,8 @@ async function foty(tp, app) {
 
   dbgYAML = {
     __notePath: tp.file.path(true /*relative*/),
-    __noteTitle: tp.file.title,
+    //For some FileNames there is a YAMLParserError if no string before
+    __noteTitle: "is    "+tp.file.title,
     __activeFile: tp.config.active_file.path,
     /* 1-create with alt-e
      * 2-create from link or create with ctrl-n

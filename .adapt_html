@@ -88,11 +88,20 @@ if [ $1 = "domakepub" ]; then
   #
   #
   # Entferne aus dem Dateibaum nicht anzuzeigende Dateien
-  # show_diagrams, show_formats.html show_greek.html, show_hotkeys.html, # show_styles.html
-  declare -a htm=("show_diagrams" "show_formats" "show_greek" "show_hotkeys") # "show_styles"
-  for i in "${htm[@]}"; do
+  # plan, show_diagrams, show_export, show_formats show_greek, show_hotkeys show_links , # show_styles
+  declare -a md=( "plan" "show_diagrams" "show_export" "show_formats" "show_greek" "show_hotkeys" "show_links") # "show_styles"
+  for i in "${md[@]}"; do
      sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="1"><a class="tree-item-self is-clickable nav-file-title" href="'"$i"'.html" data-path="'"$i"'.md"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
   done
+  # PROJEKTE.md
+     sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="1"><a class="tree-item-self is-clickable nav-file-title" href="projekte.html" data-path="PROJEKTE.md"><div class="tree-item-inner nav-file-title-content">PROJEKTE<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
+  # projects.html
+  declare -a html=( "projects")
+  for i in "${html[@]}"; do
+     sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="1"><a class="tree-item-self is-clickable nav-file-title" href="'"$i"'.html" data-path="'"$i"'.html"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><div class="nav-file-tag">html<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
+  done
+  # werkstatt/-inhalt
+    sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="2"><a class="tree-item-self is-clickable nav-file-title" href="werkstatt\/-inhalt.html" data-path="Werkstatt\/-inhalt.md"><div class="tree-item-inner nav-file-title-content">-inhalt<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
   echo "Für Public überflüssige Dateien aus dem Dateibaum gelöscht"
   #
   #
@@ -149,29 +158,20 @@ if [ $1 = "domakepub" ]; then
   echo "Public Backlinks in metadata.json korrigiert"
   #
   #
-  # Lösche in Kopie von site-lib/metadata.json alles Unnötige
+  # Lösche in Kopie von site-lib/metadata.json alles Unnötige und dumpe die Ergebnisdatei
   # Ist wiederholbar, da die entfernten dann ja weg sind
   python3 .verkleinere_metadata.py
-  echo "In public metadata.json alle private files gelöscht"
-  #
-  #
-  # Lösche in Kopie von site-lib/metadata.json den Inhalt alle Descriptions in "webpages"
-  # Ist wiederholbar 
-  python3 .entferne_desccription_metadata.py
-  echo "In public metadata.json alle descriptions im webpages schlüssel geleert"
+  python3 -c "import json, sys; print(json.dumps(json.load(sys.stdin), separators=(',', ':')))" < site-lib/metadata.json > xxx.json
+  mv xxx.json site-lib/metadata.json
+  echo "Public metadata.json verkleinert"
   #
   #
   # Von jeder Dateisorte eine Datei beautifien
-  .beautify_json "site-lib/metadata.json"
-  .css_beautify "site-lib/styles/snippets.css"
-  .js_beautify "site-lib/scripts/webpage.js"
-  .html_beautify "site-lib/html/file-tree-content.html"
-  .html_beautify "home.html"
-  cp "site-lib/metadata_pretty_pretty.json" "site-lib/metadata_pretty_pub.json"
-  cp "site-lib/styles/snippets_pretty_pretty.css" "site-lib/styles/snippets_pretty_pub.css"
-  cp "site-lib/scripts/webpage_pretty_pretty.js" "site-lib/scripts/webpage_pretty_pub.js"
-  cp "site-lib/html/file-tree-content_pretty_pretty.html" "site-lib/html/file-tree-content_pretty_pub.html"
-  cp "home_pretty_pretty.html" "home_pretty_pub.html"
+  .beautify_json "site-lib/metadata.json" "pub"
+  .css_beautify "site-lib/styles/snippets.css" "pub"
+  .js_beautify "site-lib/scripts/webpage.js" "pub"
+  .html_beautify "site-lib/html/file-tree-content.html" "pub"
+  .html_beautify "home.html" "pub"
   echo "beautified: s-l/metadata, /styles/snippets, /scripts/webpage, /html/file-tree-content, home"
 
 elif [ $1 = "makepriv" ]; then
@@ -197,4 +197,13 @@ elif [ $1 = "makepriv" ]; then
   find xxxstutiis -type f -name "*.html" -print0 | xargs -0 sed -i 's/werkstatt/xxxstutiis/g'
   find xxxstutiis -type f -name "*.html" -print0 | xargs -0 sed -i 's/Werkstatt/XXXstutiis/g'
   echo "Alle Links in xxxstutiis von werkstatt auf xxxstutiis geändert"
+  #
+  #
+  # Von jeder Dateisorte eine Datei beautifien
+  .beautify_json "site-lib/metadata.json" "priv"
+  .css_beautify "site-lib/styles/snippets.css" "priv"
+  .js_beautify "site-lib/scripts/webpage.js" "priv"
+  .html_beautify "site-lib/html/file-tree-content.html" "priv"
+  .html_beautify "home.html" "priv"
+  echo "beautified: s-l/metadata, /styles/snippets, /scripts/webpage, /html/file-tree-content, home"
 fi

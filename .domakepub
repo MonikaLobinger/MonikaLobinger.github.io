@@ -4,7 +4,7 @@ if [ ! -f "site-lib/html/file-tree-content.sv" ]; then
    mv werkstatt Private
    mv xxxstutiis werkstatt
    .adapt_html "domakepub"
-   .testcorrectnessoffiles "domakepub"
+   .testoutput "domakepub"
 
    cp /media/monika/HOME/OneDrive/Notes/Projekte/Schule/README.md .
  else

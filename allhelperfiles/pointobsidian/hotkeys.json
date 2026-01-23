@@ -289,28 +289,10 @@
       "key": "="
     }
   ],
-  "chronology:show-chronology-view": [
-    {
-      "modifiers": [
-        "Alt",
-        "Shift"
-      ],
-      "key": "="
-    }
-  ],
   "crafty:show-panel": [
     {
       "modifiers": [],
       "key": "F6"
-    }
-  ],
-  "calendar:show-calendar-view": [
-    {
-      "modifiers": [
-        "Alt",
-        "Shift"
-      ],
-      "key": "="
     }
   ],
   "backlink:open": [
@@ -328,6 +310,32 @@
         "Shift"
       ],
       "key": "'"
+    }
+  ],
+  "chronology:show-chronology-view": [
+    {
+      "modifiers": [
+        "Alt",
+        "Shift"
+      ],
+      "key": ";"
+    }
+  ],
+  "calendar:show-calendar-view": [
+    {
+      "modifiers": [
+        "Alt"
+      ],
+      "key": ";"
+    }
+  ],
+  "foldertypes:open-poty-dialog": [
+    {
+      "modifiers": [
+        "Mod",
+        "Shift"
+      ],
+      "key": ","
     }
   ]
 }

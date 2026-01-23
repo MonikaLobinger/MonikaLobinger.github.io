@@ -4,7 +4,7 @@ if [ -f "site-lib/html/file-tree-content.sv" ]; then
   mv werkstatt xxxstutiis
   mv Private werkstatt
   .adapt_html "makepriv"
-  .testcorrectnessoffiles "makepriv"
+  .testoutput "makepriv"
 else
   echo "Bereits Privat"
 fi

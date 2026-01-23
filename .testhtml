@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+echo "Um home.html neu lesbar zu machen mit irgendeinem Argument aufrufen"
+if [[ -v 1 ]]; then
+  .domakepub
+  .makepriv
+  cp home.html home.ori
+  cp home_pretty_priv.html home.html
+fi
+vim -O home.html site-lib/html/custom-head-content-content.html

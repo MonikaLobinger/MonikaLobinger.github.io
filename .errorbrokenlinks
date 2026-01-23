@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+echo "Das checkt die Links in der veröffentlichten Seite auf github"
+read -p "Weitermachen? [J/n] " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Jj]$ ]]; then
+    echo "also nicht"
+    exit 1
+fi
+linkchecker --ignore-url=".*site-lib.*" --check-extern https://monikalobinger.github.io/home.html

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+echo "Um home.html neu lesbar zu machen mit irgendeinem Argument aufrufen"
+if [[ -v 1 ]]; then
+  .domakepub
+  .makepriv
+  cp site-lib/styles/snippets.css site-lib/styles/snippets.ori
+  cp site-lib/styles/snippets_pretty_priv.css site-lib/styles/snippets.css
+fi
+vim -O site-lib/styles/snippets.css /media/monika/HOME/OneDrive/Notes/Projekte/Schule/.obsidian/snippets/adapt.css

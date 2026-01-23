@@ -26,6 +26,7 @@ def iterate(data):
     clear_dict(data["webpages"])
     clear_dict(data["fileInfo"])
     clear_Dict(data["sourceToTarget"])
+    leere_description(data["webpages"])
 
 
 def clear_list(files):
@@ -72,6 +73,9 @@ def clear_Dict(files):
             #print(key)
             del files[key]
 
+def leere_description(files):
+    for key in list(files.keys()):
+        files[key]["description"]="ABCYYZ"
 
 
 file_in="site-lib/metadata.json"

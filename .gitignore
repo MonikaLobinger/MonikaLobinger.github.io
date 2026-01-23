@@ -8,12 +8,18 @@ ZZZZZZ2/
 zzzzzz2/
 materialien/philosophie/uni_wien.html
 materialien/philosophie/podcasts_uni_wien.html
+werkstatt/*
+!werkstatt/mitschriften/
 rmdirs
 file-tree-content.sv
 file-tree-content.min
+plan.html
 show_diagrams.html
+show_export.html
+show_formats.html
 show_greek.html
 show_hotkeys.html
+show_links.html
 *.sv
 *.swp
 .xxx
@@ -31,4 +37,3 @@ show_hotkeys.html
 *_pretty_pub*.json
 materialien/breadcrumbs.js
 materialien/catalog.js
-vimrc.js
