@@ -1,14 +1,502 @@
-module.exports = foty // templater call: "await tp.user.foty(tp, app)"
+'use strict'
+// module.exports ist Nodejs Spezifisch, das geht nicht im Browser
+module.exports = foty
+//
+const SimplePropertyRetriever = { // eslint-disable-line
+  // /////////////////////////////////////////////////////////////////////////////
+  // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Enumerability_and_ownership_of_properties
+  // Enumerable properties are those properties whose internal enumerable flag is
+  //     set to true, which is the default for properties created via simple
+  //     assignment or via a property initializer. Properties defined via
+  //     Object.defineProperty and such are not enumerable by default.
+  //     Most iteration means (such as for...in loops and Object.keys)
+  //     only visit enumerable keys.
+  // for ... in Das ist ein language statement wie while z.B.
+  //     The for...in statement iterates over all enumerable string properties
+  //     of an object (ignoring properties keyed by symbols), including
+  //     inherited enumerable properties.
+  //     enumerable, keine Symbols, aber alle geerbten
+  //
+  // Object.keys
+  // Object.values
+  // Object.entries                    enumerable      own      strings
+  // Object.getOwnPropertyNames        non+enumerable  own      strings         => array
+  // Object.getOwnPropertySymbols      non+enumerable  own      symbols         => array
+  // Object.getOwnPropertyDescriptors  non+enumerable  own      strings/symbols => obj
+  // Reflect.ownKeys                   non+enumarable  own      strings/symbols
+  // for...in                          enumarable      own/inh  strings
+  // Object.assign (nach dem ersten)   enumerable      own      strings/symbols
+  // Object spread                     enumerable      own      strings/symbols
+  //
+  getOwnEnumProps (obj, andSymbols = false) {
+    return this._getPropertyNames(obj, true, false, andSymbols, this._enumerable)
+    // Or could use for...in filtered with Object.hasOwn or just this: return Object.keys(obj)
+  },
+  getOwnNonEnumProps (obj, andSymbols = false) {
+    return this._getPropertyNames(obj, true, false, andSymbols, this._notEnumerable)
+  },
+  getOwnProps (obj, andSymbols = false) {
+    return this._getPropertyNames(obj, true, false, andSymbols, this._enumerableAndNot)
+    // Or just use: return Object.getOwnPropertyNames(obj)
+  },
+  getPrototypeEnumProps (obj, andSymbols = false) {
+    return this._getPropertyNames(obj, false, true, andSymbols, this._enumerable)
+  },
+  getPrototypeNonEnumProps (obj, andSymbols = false) {
+    return this._getPropertyNames(obj, false, true, andSymbols, this._notEnumerable)
+  },
+  getPrototypeProps (obj, andSymbols = false) {
+    return this._getPropertyNames(obj, false, true, andSymbols, this._enumerableAndNot)
+  },
+  getOwnAndPrototypeEnumProps (obj, andSymbols = false) {
+    return this._getPropertyNames(obj, true, true, andSymbols, this._enumerable)
+    // Or could use unfiltered for...in
+  },
+  getOwnAndPrototypeNonEnumProps (obj, andSymbols = false) {
+    return this._getPropertyNames(obj, true, true, andSymbols, this._notEnumerable)
+  },
+  getOwnAndPrototypeEnumAndNonEnumProps (obj, andSymbols = false) {
+    return this._getPropertyNames(obj, true, true, andSymbols, this._enumerableAndNot)
+  },
+  // Private static property checker callbacks
+  _enumerable (obj, prop) {
+    return Object.prototype.propertyIsEnumerable.call(obj, prop)
+  },
+  _notEnumerable (obj, prop) {
+    return !Object.prototype.propertyIsEnumerable.call(obj, prop)
+  },
+  _enumerableAndNot (obj, prop) {
+    return true
+  },
+  // Inspired by http://stackoverflow.com/a/8024294/271577
+  _getPropertyNames (obj, iterateSelf, iteratePrototype, andSymbols, shouldInclude) {
+    const props = []
+    do {
+      if (iterateSelf) {
+        Object.getOwnPropertyNames(obj).forEach((prop) => {
+          if (props.indexOf(prop) === -1 && shouldInclude(obj, prop)) {
+            props.push(prop)
+          }
+        })
+        if (andSymbols) {
+          Object.getOwnPropertySymbols(obj).forEach((prop) => {
+            if (props.indexOf(prop) === -1 && shouldInclude(obj, prop)) {
+              props.push(prop.toString())
+            }
+          })
+        }
+      }
+      if (!iteratePrototype) {
+        break
+      }
+      iterateSelf = true
+      obj = Object.getPrototypeOf(obj)
+    } while (obj)
+    return props
+  },
+}
+function log (obj, ind = '') { // eslint-disable-line
+  console.log(ind + '{')
+  Object.getOwnPropertyNames(obj).forEach((name) => {
+    let value = obj[name]
+    switch (typeof value) {
+      case 'string':
+        value = '\'' + value + '\''
+        break
+      case 'function':
+        {
+          const fuStr = value.toString()
+          let fuName = fuStr.slice(9, fuStr.indexOf('('))
+          if (!fuName.length) {
+            fuName = name
+          } else {
+            fuName = fuName.trimEnd()
+          }
+          value = '[Function: ' + fuName + ']'
+        }
+        break
+    }
+    console.log(`${ind}  ${name}: ${value},`)
+  })
+  console.log(ind + '}')
+}
 
-//#region Configuration callbacks
+/** User script für Obsidians Templater plugin
+ *
+ * <h2>Herausforderung der Dokumentation</h2>
+ *
+ * ganz allgemein in jsdoc gilt, dass jeder Text der vor dem ersten Schlüsselwort
+ * steht zum impliziten ersten Schlüsselwort @description gehört.
+ *
+ * Weiterhin gilt, dass auch Schlüsselworte, die etwas einmaliges bedeuten, wie
+ * z.B. @alias mehrmals vorkommen können. Innerhalb eines headers überschreibt
+ * das zweite Vorkommen das erste.
+ *
+ * Verwendet man explizit @description wird die implizite @description überschrieben.
+ *
+ * jsdoc wurde erfunden, bevor javascript objektorientierte klassen hatte.
+ * javascript hatte damals schon das konzept der konstruktorfunktionen.
+ * auf diese sind die schlüsselworte @class und @classdesc zugeschnitten.
+ *
+ * aus diesem grund sind auch @class und @constructor synonyme
+ *
+ * was über einer class Klasse steht gehört zum @constructor, das
+ * Schlüsselwort @constructor ist implizit, es  ist egal, ob es da steht oder nicht.
+ * um die class Klasse selbst zu beschreiben braucht man auch hier das
+ * schlüsselwort @classdesc
+ *
+ * was über dem constructor steht gehört zum @constructor, auch hier ist das
+ * Schlüsselwort @constructor implizit.
+ *
+ * Hat man BEIDE ist das kein Syntaxfehler.
+ *
+ * So muss man zum einen wissen, dass sie sich derart ergänzen, dass Schlüsselworte
+ * die in einem fehlen und im anderen vorhanden sind genommen werden, ganz gleich
+ * wo sie stehen.
+ *
+ * Und zum anderen, dass falls ein Schlüsselwort in beiden existiert, nur das von
+ * EINEM genommen wird. Das gilt auch für solche, die es mehrfach geben kann, wie
+ * z.B. @param oder @example. Alle ihre mehrfachvorkommen werden gewählt, so
+ * sie aus dem EINEN sind.
+ *
+ * Frägt sich, wer ist der EINE? Das unterscheidet sich nach dem Schlüsselwort. Bis
+ * jetzt konnte ich feststellen, dass bis auf @param alle anderen aus dem Header
+ * der Klasse genommen werden.
+ *
+ * Anders ausgedrückt: Gibt es header Klasse und header Konstruktor und haben beide
+ * die gleichen Einträge, werden alle aus header Klasse genommen, nur @param
+ * Einträge werden aus header Konstruktor genommen.
+ *
+ * Insbesondere überschreibt eine @description in header Konstruktor
+ * nicht die @description in header Klasse. Da es unmöglich ist, einen header
+ * ohne implizite @description zu erstellen, ist es unmöglich den Konstruktor im header Konstruktor
+ * zu beschreiben.
+ *
+ * <h3>Qualifizierte Pfade</h3>
+ *
+ * Sobald Code in einem Modul steht, ist es nicht mehr möglich, in einem jsdoc
+ * Kommentar auf seine Objekte ohne vorangestelltes 'module:modulname' zuzugreifen.
+ * Dies gilt auch für Verweise innerhalb dieses Modules. Auch diese müssen voll
+ * qualifiziert sein. Es gibt keine Kurzform.
+ *
+ * `{@ link XXX}`
+ * <= Sobald Datei ein Modul ist, ist das (auch ohne das Leerzeichen) kein Link
+ * sondern: {@link FotyError} <br>
+ * `{@ link foty}`
+ * <= Sobald Datei ein Modul ist, ist das (auch ohne das Leerzeichen) kein Link
+ * sondern: {@link foty} <br>
+ *
+ * Würde ich mittels 'exports.objectname = declaration' exportieren, würde jsdoc
+ * 'objectname' als exportiert erkennen. Eine Zuweisung an 'exports' außerhalb der
+ * Deklaration erkennt jsdoc nicht automatisch.
+ *
+ * Die einzige Möglichkeit dies zu umgehen, die nur im Kommentar stattfindet,
+ * ist mit '@alias' vor jedem exportierten Object den Namepath zu korrigieren.
+ *
+ * Um Dokumentation für private Objekte zu erzeugen, muss jsdoc mit der Option
+ * '--private' aufgerufen werden. Klassenobjekte die mit Doppelkreuz beginnen,
+ * erkennt jsdoc nicht automatisch als private. Das Tag '@private' ist nötig.
+ *
+ * Ein qualifizierter Zugriff auf das nun dokumentierte private Objekt von einem
+ * anderen Dokumentationsblock ist nicht möglich. Mit
+ * '@alias module:foty.XXX#privateFunktion' wird ein funktionierender
+ * Namepath erstellt.
+ *
+ * So sind nun folgende Links möglich:
+ *
+ * {@link module:foty.foty} Static member
+ * [foty]{@link module:foty.foty}<br>
+ * {@link module:foty~FotyError} Inner member
+ * [FotyError]{@link module:foty~FotyError}<br>
+ * {@link module:foty.XXX#normaleFunktion} Instance member
+ * [XXX#normaleFunktion]{@link module:foty.XXX#normaleFunktion}<br>
+ * {@link module:foty.XXX.statischeFunktion} Static member
+ * [XXX.statischeFunktion]{@link module:foty.XXX.statischeFunktion}<br>
+ * {@link module:foty.XXX."#private"} static member
+ * [XXX.#private]{@link module:foty.XXX."#private"}<br>
+ *
+ * <h3>Literale als Prototyp</h3>
+ * Um das gesamte Literal als Klasse zu kennzeichnen, kann man im über der
+ * Zuweisung des Literals an eine Variable einen Header mit dem @class
+ * Schlüsselwort schreiben. Damit werden die dokumentierten Funktionen innerhalb
+ * des Literals als statische Klassen Member erkannt.
+ * Um sie alle als Instance Member zu spezifizieren, fügt man vor der öffnenden
+ * geschweiften Klammer des Literals ein @lends Schlüsselwort ein, das dies als
+ * prototyp kennzeichnet.
+ * z.B.  '@lends module:meinModul~meinProto.prototype'
+ * Ansonsten müsste man mittels @alias jede einzelne Funktion als Instance Member
+ * undefinieren.
+ *
+ * <h2>Dokumentationsvereinbarungen</h2>
+ * <dl class="module">
+ * <dt>Kommandozeilenoptionen</dt>
+ *   <dd>jsdoc wird mit der Option --private aufgerufen
+ *   </dd>
+ * <dt>Exportierte Objekte</dt>
+ *   <dd>Für alle vom Modul exportierten Objekte wird mittels eines Tag
+ *   '@alias' der Namepath korrigiert
+ *   </dd>
+ * <dt>Kennzeichnung privater Objekte</dt>
+ *   <dd>private Objekte, die dokumentiert werden sollen, werden mit dem Tag
+ *   '@private' gekennzeichnet, auch wenn ihr Name mit einem Doppelkreuz beginnt.
+ *   </dd>
+ * <dt>Alias für private dokumentierte Objekte</dt>
+ *   <dd>Private dokumentierte Objekte erhalten ein Tag '@alias'
+ *   </dd>
+ * <dt>Die description von Klassen kommt als @classdesc in den Header</dt>
+ *   <dd>Jeder Klassenheader erhält ein Tag @classdec, das die Klasse selbst
+ *   beschreibt.
+ *   </dd>
+ * <dt>Die description von Konstruktoren kommt in die Klasse, nicht den Constructor</dt>
+ *   <dd>Das (implizite) Tag '@description' inklusive des zugehörigen Tags
+ *   '@mermaid' kommt in den Header der Klasse.
+ *   </dd>
+ * <dt>@param und @example kommen in den Header des Constructors</dt>
+ *   <dd> Die Tags '@param' und '@example' kommen in den Header des Constructors.
+ *   </dd>
+ * <dt>Literale als Prototpyen erhalten @class, @hideconstructor und @lends</dt>
+ *    <dd>
+ *    <ul>
+ *    <li>In den Klassenheader kommt das Schlüsselwort @class.
+ *    </li>
+ *    <li>In den Klassenheader kommt das Schlüsselwort @hideconstructor
+ *    </li>
+ *    <li>Vor die öffnende Literalklammer kommt das Schlüsselwort @lends mit dem
+ *    voll qualifiziertem Namen der Klasse, falls dieser ein @alias ist, diesem,
+ *    gefolgt von '.prototype'
+ *    z.B.  '@lends module:meinModul~meinProto.prototype'
+ *    </li>
+ *    </ul>
+ *    </dd>
+ * </dl>
+ * <h2>Addenda</h2>
+ * <ul>
+ *    <li>Zu dokumentierende Objekte dürfen keine zwei Dollar hintereinander
+ *    im Namen haben; an manchen Stellen werden sonst von jsdoc die Verweise
+ *    auf die Anker nicht richtig erzeugt.
+ *    </li>
+ * </ul>
+ *
+ * @module foty
+ */
+/** XXX class to test jsdoc - wird nicht in jsdoc übernommen
+ * @classdesc class XXX description
+ * @description constructor XXX description
+ * @alias module:foty.XXX
+ */
+class XXX { // eslint-disable-line
+  /**
+   * @param {number} indent - Param indent description
+   * @example
+   * // Beispiel
+   * new XXX(12)
+   */
+  constructor (indent) { console.log(indent) }
+  /**
+   * @function module:foty.XXX#fakeFunction
+   */
+  /** normaleFunktion method oneliner */
+  normaleFunktion () { console.log('normaleFunktion') }
+  /** statischeFunktion method oneliner */
+  static statischeFunktion () { console.log('statischeFunktion') }
+  /** #private method oneliner
+   * @private
+   * @alias module:foty.XXX."#private"
+   */
+  #private () { console.log('#private') }
+}
+const DEFAULT_LANGUAGE = 'en'
+const UNNAMED_FILE = 'Untitled'
+const PATH_FACTOR = 10
+
+/** callback to compute YAML value or to compute title
+ *
+ * Callbacks können verwendet werden, um einen beliebigen YAML Wert zu berechnen.
+ *
+ * Ausserdem können sie verwendet werden, um den Titel zu bestimmen, dann wird
+ * die Funktion in der Property 'title_date_function' einer `noteSetting`
+ * gesetzt.
+ *
+ * @callback FrontmatterCallback
+ * @param {String} noteName - Name der Notiz ohne Marker und ohne name_end
+ * @param {String} [noteType] - Typ der Notiz
+ * @param {Object} [noteSetting] - Objekt mit den Einstellungen für den Typ
+ * @param {Object} [tp] - templater object
+ * @param {Object} [app] - Obsidian App object
+ * @param {Object} [computedValues] - Objekt zum Infoaustausch zwischen Callbacks
+ * @returns {(String|Array.<String>)}
+ */
+
+/** returns alias array for a place - "place, country" => ["place(country)"]
+ *
+ * Verwandelt einen Eingabestring der Form "xx, yy[, evtl noch was]" in ein
+ * Array aus einem String der Form ["xx(yy evtl noch was)"]
+ *
+ * Enthält `noteName` kein Komma wird ein leeres Array zurückgegeben.
+ *
+ * @type {FrontmatterCallback}
+ * @param {String} noteName - Name der Notiz in der Form Ort, Land
+ * @returns {Array.<String>} ["Ort(Land)"] oder [ ]
+ *
+ * @example
+ * // Ohne Komma
+ * cbkAliasOrt('ort')
+ * // returns empty array []
+ * @example
+ * // Mit Komma
+ * cbkAliasOrt('ort, land')
+ * // returns ['ort(land)']
+ * @example
+ * // Überflüssige Leerzeichen werden entfernt
+ * cbkAliasOrt('ort,     land')
+ * // returns ['ort(land)']
+ * @example
+ * // Weitere Kommata werden wie Leerzeichen behandelt
+ * cbkAliasOrt('ort,     land, nochwas')
+ * // returns ['ort(land nochwas)']
+ */
+function cbkAliasOrt (noteName) {
+  const aliasArr = []
+  if (noteName.indexOf(',') !== -1) {
+    const partsArr = noteName.replace(/, */g, ',').split(',')
+    const firstPart = partsArr.shift()
+    aliasArr.push(firstPart + '(' + partsArr.join(' ') + ')')
+  }
+  return aliasArr
+}
+
+/** returns cssclasses array - "noteTyp" => ["noteTyp"]
+ *
+ * Gibt ein Array aus dem Argument `noteTyp` zurück
+ *
+ * @type {FrontmatterCallback}
+ * @param {*} unused - unbenutzt
+ * @param {String} noteTyp - Typ der Notiz
+ * @returns {Array.<String>} ["noteTyp"]
+ *
+ * @example
+ * // egal was
+ * cbkFmtCssClasses (undefined, 'egalwas')
+ * // returns array ['egalwas']
+ */
+function cbkFmtCssClasses (unused, noteType) {
+  const cssClasses = []
+  cssClasses.push(noteType)
+  return cssClasses
+}
+
+/** returns "## -footnotes" or "" for mocs
+ *
+ * Gibt einen String zurück, der als letzte Zeile gedacht ist. Wenn die Notiz
+ * ein Verzeichnis (moc) ist, wird ein leerer String zurückgegeben.
+ *
+ * @type {FrontmatterCallback}
+ * @param {String} noteName - Name der Notiz ohne Marker und ohne name_end
+ * @param {*} unused - unbenutzt
+ * @param {Object} noteSetting - Settings
+ * @returns {String} "## -footnotes" oder ""
+ *
+ * @example
+ * // Kein Moc
+ * cbkFmtLastLine('meine Notiz', 'egalwas', settings)
+ * // returns '## -footnotes'
+ * @example
+ * // Moc, Mocstring ist '-'
+ * cbkFmtLastLine('-meine Notiz', 'egalwas', settings)
+ * // returns ''
+ */
+function cbkFmtLastLine (noteName, unused, noteSetting) {
+  let lastline = '## -footnotes'
+  const mocstring = noteSetting.valueOf('mocstring')
+  if (noteName.startsWith(mocstring)) {
+    lastline = ''
+  }
+  return lastline
+}
+
+/** returns current date formatted with value of "date_created_date_format"
+ *
+ * Gibt das aktuelle Datum über den Templater `tp` zurück, falls
+ * in `noteSetting`"date_created_date_format" gesetzt ist, in diesem Format,
+ * sonst im Default Format des Templateres
+ *
+ * @type {FrontmatterCallback}
+ * @param {*} unused1 - unbenutzt
+ * @param {*} unused2 - unbenutzt
+ * @param {Object} noteSetting - Settings
+ * @param {Object} tp - Templater Object
+ * @returns {String} das aktuelle Datum formatiert nach den Vorgaben
+ *
+ * @example
+ * // Default
+ * cbkFmtNow(undefined, undefined, noteSetting, tp)
+ * // returns '2026-02-27'
+ * @example
+ * // 'date_created_date_format' ist 'dddd, D. MMMM YYYY, H:mm:ss'
+ * cbkFmtNow(undefined, undefined, noteSetting, tp)
+ * // returns 'Friday, 27. February 2026 9:12:06'
+ */
+function cbkFmtNow (unused1, unused2, noteSetting, tp) {
+  let format = noteSetting.valueOf('date_created_date_format')
+  if (format === '') format = undefined
+  return tp.date.now(format)
+}
+
+/** returns noteName, for mocs without leading mocstring
+ *
+ * Gibt den noteName zurück, außer für Verzeichnisse, dort wird der Name ohne
+ * den führenden mocstring zurückgegeben
+ *
+ * @type {FrontmatterCallback}
+ * @param {String} noteName - Name der Notiz ohne Marker und ohne name_end
+ * @param {*} unused - unbenutzt
+ * @param {Object} noteSetting - Settings
+ * @returns {String} `noteName` ohne führenden mocstring
+ *
+ * @example
+ * // Kein Moc
+ * cbkNoteName('meine Notiz', 'egalwas', settings)
+ * // returns 'meine Notiz'
+ * @example
+ * // Moc, Mocstring ist '-'
+ * cbkNoteName('-mein Verzeichnis', 'egalwas', settings)
+ * // returns 'mein Verzeichnis'
+ */
+function cbkNoteName (noteName, unused, noteSetting) {
+  let formattedNoteName = noteName
+  const mocstring = noteSetting.valueOf('mocstring', '')
+  if (noteName.startsWith(mocstring)) {
+    formattedNoteName = noteName.slice(mocstring.length)
+  }
+  return formattedNoteName
+}
+
+/** returns 'zu [[`noteName`]]'
+ *
+ * Gibt einen String zurück, der mit 'zu ' beginnt und mit
+ * `noteName` in doppelten eckigen Klammern endet.
+ *
+ * @type {FrontmatterCallback}
+ * @param {String} noteName - Name der Notiz ohne Marker und ohne name_end
+ * @returns {String} zu [[`noteName`]]
+ *
+ * @example
+ * cbkSndLineMitschrift('meine Notiz')
+ * // returns 'zu [[meine Notiz]]'
+ */
+function cbkSndLineMitschrift (noteName) {
+  return 'zu [[' + noteName + ']]'
+}
+/* eslint-disable */
 function cbkAliasPerson(noteName) {
-  let aliases=[]
+  console.log('Unused? Callback AliasPerson')
+  let aliases = []
   let name = noteName
-  var count = (noteName.match(/,/g) || []).length;
-  if(count > 1) {
-    let last_idx=noteName.lastIndexOf(",")
-    if(last_idx != -1) {
-      name = noteName.slice(0,last_idx)
+  var count = (noteName.match(/,/g) || []).length
+  if (count > 1) {
+    let last_idx = noteName.lastIndexOf(",")
+    if (last_idx != -1) {
+      name = noteName.slice(0, last_idx)
     }
   }
   let alias = name.replace(/, /g, ",")
@@ -16,109 +504,110 @@ function cbkAliasPerson(noteName) {
   alias = strArr[0]
   strArr.shift()
   alias = strArr.join(" ") + " " + alias
-
-  aliases.push(alias)
-  return aliases
-}
-function cbkAliasOrt(noteName) {
-  let aliases=[]
-  let alias = noteName.replace(/, /g, ",")
-  let strArr = alias.split(",")
-  alias = strArr[0]
-  strArr.shift()
-  alias += "(" + strArr.join(" ") + ")"
-
   aliases.push(alias)
   return aliases
 }
 function cbkHeaderPerson(noteName) {
-  let header=""
+  console.log('Unused? Callback HeaderPerson')
+  let header = ""
   let name = noteName
-  var count = (noteName.match(/,/g) || []).length;
-  if(count > 1) {
-    let last_idx=noteName.lastIndexOf(",")
-    if(last_idx != -1) {
-      name = noteName.slice(0,last_idx)
+  var count = (noteName.match(/,/g) || []).length
+  if (count > 1) {
+    let last_idx = noteName.lastIndexOf(",")
+    if (last_idx != -1) {
+      name = noteName.slice(0, last_idx)
     }
   }
   let strArr = name.split(",")
-  if(strArr.length > 1)
-    header = strArr[1].trim()+" "+strArr[0].trim()
-  else
-    header = name
+  if (strArr.length > 1) header = strArr[1].trim() + " " + strArr[0].trim()
+  else header = name
   return header
 }
 function cbkHeaderOrt(noteName) {
+  console.log('Unused? Callback HeaderOrt')
   let header = ""
   let name = noteName
   let strArr = name.split(",")
-  if(strArr.length > 1)
-    header = strArr[1].trim()+" "+strArr[0].trim()
-  else
-    header = name
+  if (strArr.length > 1) header = strArr[1].trim() + " " + strArr[0].trim()
+  else header = name
   return header
 }
 function cbkBookAlias(noteName, noteType, noteSetting, tp, app, computedValues) {
-  let alias = computedValues.buchautor.slice(0,3) +
-              computedValues.buchtitel.slice(0,3)
+  console.log('Unused? Callback BookAlias')
+  let alias = computedValues.buchautor.slice(0, 3) + computedValues.buchtitel.slice(0, 3)
   return alias
 }
 function cbkBookAliasAsTag(noteName, noteType, noteSetting, tp, app, computedValues) {
-  let alias = "bookid/"+cbkBookAlias(noteName, noteType, noteSetting, tp, app, computedValues)
+  console.log('Unused? Callback BookAliasAsTag')
+  let alias = "bookid/" + cbkBookAlias(noteName, noteType, noteSetting, tp, app, computedValues)
   return alias
 }
 function cbkBuchTitel(noteName, noteType, noteSetting, tp, app, computedValues) {
+  console.log('Unused? Callback BuchTitel')
   return computedValues.buchtitel
 }
 function cbkBuchUntertitel(noteName, noteType, noteSetting, tp, app, computedValues) {
+  console.log('Unused? Callback BuchUntertitel')
   return computedValues.buchuntertitel
 }
 function cbkBuchAutor(noteName, noteType, noteSetting, tp, app, computedValues) {
+  console.log('Unused? Callback BuchAutor')
   return computedValues.buchautor
 }
 function cbkBuchAutorv(noteName, noteType, noteSetting, tp, app, computedValues) {
+  console.log('Unused? Callback BuchAutorv')
   return computedValues.buchautorv
 }
 function cbkBuchDatum(noteName, noteType, noteSetting, tp, app, computedValues) {
+  console.log('Unused? Callback BuchDatum')
   return computedValues.buchdatum
 }
 function cbkBuchVerlag(noteName, noteType, noteSetting, tp, app, computedValues) {
+  console.log('Unused? Callback BuchVerlag')
   return computedValues.buchverlag
 }
 function cbkBuchSeiten(noteName, noteType, noteSetting, tp, app, computedValues) {
+  console.log('Unused? Callback BuchSeiten')
   return computedValues.buchseiten
 }
 function cbkBuchSprache(noteName, noteType, noteSetting, tp, app, computedValues) {
+  console.log('Unused? Callback BuchSprache')
   return computedValues.buchsprache
 }
 function cbkBuchIsbn(noteName, noteType, noteSetting, tp, app, computedValues) {
+  console.log('Unused? Callback BuchIsbn')
   return computedValues.buchisbn
 }
 function cbkBuchIsbn13(noteName, noteType, noteSetting, tp, app, computedValues) {
+  console.log('Unused? Callback BuchIsbn13')
   return computedValues.buchisbn13
 }
 function cbkBuchEbook(noteName, noteType, noteSetting, tp, app, computedValues) {
+  console.log('Unused? Callback BuchEbook')
   return computedValues.buchebook
 }
 async function cbkAskGoogleForTitle(noteName, noteType, noteSetting, tp, app, computedValues) {
-  let noteTitle=""
+  console.log('Unused? Callback AskGoogleForTitle')
+  let noteTitle = ""
+
   function nachname(name) {
     return /[^ ]*$/.exec(name)[0]
   }
+
   function vorname(name) {
-    return name.substring(0, name.lastIndexOf(' '))
+    return name.substring(0, name.lastIndexOf(" "))
   }
+
   function jahr(datum) {
     let jahr = ""
-    if(datum != undefined) {
-      jahr = datum.slice(0,4)
+    if (datum != undefined) {
+      jahr = datum.slice(0, 4)
     }
     return jahr
   }
-
   let maxResults = 20
   let bookQuery
-  bookQuery = await tp.system.prompt("Angaben um Buch bei Google Books zu suchen 📚🔎");
+  bookQuery = await tp.system.prompt("Angaben um Buch bei Google Books zu suchen 📚🔎")
   if (bookQuery == undefined) {
     console.log("User cancelled")
     return noteTitle
@@ -132,33 +621,32 @@ async function cbkAskGoogleForTitle(noteName, noteType, noteSetting, tp, app, co
   let data
   try {
     data = await resp.json()
-  } catch(e) {
+  } catch (e) {
     console.log("Json klappte nicht")
     return noteTitle
   }
-
-  let books = data.items;
+  let books = data.items
   let texts = []
   books.map(function(book) {
-    let text=""
-    if(book.saleInfo.isEbook) {
+    let text = ""
+    if (book.saleInfo.isEbook) {
       text = "ebook: "
     } else {
       text = ""
     }
-    text+= book.volumeInfo.title
-    if(book.volumeInfo.authors != undefined) {
-      book.volumeInfo.authors.forEach((a,i) => {
-        if(i==0) {
-          text+=" - "
+    text += book.volumeInfo.title
+    if (book.volumeInfo.authors != undefined) {
+      book.volumeInfo.authors.forEach((a, i) => {
+        if (i == 0) {
+          text += " - "
         } else {
-          text+=", "
+          text += ", "
         }
-        text+=nachname(a)
+        text += nachname(a)
       })
     }
-    text+= " - " + jahr(book.volumeInfo.publishedDate)
-    text+= " - " + book.volumeInfo.language
+    text += " - " + jahr(book.volumeInfo.publishedDate)
+    text += " - " + book.volumeInfo.language
     texts.push(text)
   })
   const choosenbook = await tp.system.suggester(texts, books, true, "Buch wählen")
@@ -166,7 +654,6 @@ async function cbkAskGoogleForTitle(noteName, noteType, noteSetting, tp, app, co
     console.log("User cancelled")
     return noteTitle
   }
-
   let title = ""
   let subtitle = ""
   let writer = "N/A"
@@ -179,61 +666,51 @@ async function cbkAskGoogleForTitle(noteName, noteType, noteSetting, tp, app, co
   let isbn = ""
   let isbn13 = ""
   let ebook = "papier"
-          // console.log("TITEL")
-  title = choosenbook.volumeInfo.title;
-  if(choosenbook.volumeInfo.subtitle != undefined) {
-    subtitle = choosenbook.volumeInfo.subtitle;
+  title = choosenbook.volumeInfo.title
+  if (choosenbook.volumeInfo.subtitle != undefined) {
+    subtitle = choosenbook.volumeInfo.subtitle
   }
-          // console.log("AUTOR")
-  if(choosenbook.volumeInfo.authors != undefined) {
+  if (choosenbook.volumeInfo.authors != undefined) {
     writer = ""
     writerv = ""
-    choosenbook.volumeInfo.authors.forEach((a,i) => {
-      if(i>0) {
-        writer+=", "
+    choosenbook.volumeInfo.authors.forEach((a, i) => {
+      if (i > 0) {
+        writer += ", "
         if (writerv !== "") {
-          writerv+=", "
+          writerv += ", "
         }
       }
-      writer+=nachname(a)
-      writerv+=vorname(a)
+      writer += nachname(a)
+      writerv += vorname(a)
     })
   }
-          // console.log("JAHR")
-  publishedDate = jahr(choosenbook.volumeInfo.publishedDate) ;
-          // console.log("VERLAG")
-  if(choosenbook.volumeInfo.publisher != undefined) {
+  publishedDate = jahr(choosenbook.volumeInfo.publishedDate)
+  if (choosenbook.volumeInfo.publisher != undefined) {
     publisher = choosenbook.volumeInfo.publisher
   }
-          // console.log("BESCHREIBUNG")
-  if(choosenbook.volumeInfo.description != undefined) {
-    description = choosenbook.volumeInfo.description;
+  if (choosenbook.volumeInfo.description != undefined) {
+    description = choosenbook.volumeInfo.description
   }
-          // console.log("SEITEN")
-  if(choosenbook.volumeInfo.pageCount != undefined) {
-    pageCount = choosenbook.volumeInfo.pageCount ;
+  if (choosenbook.volumeInfo.pageCount != undefined) {
+    pageCount = choosenbook.volumeInfo.pageCount
   }
-          // console.log("SPRACHE")
-  if(choosenbook.volumeInfo.language != undefined) {
-    language = choosenbook.volumeInfo.language ;
+  if (choosenbook.volumeInfo.language != undefined) {
+    language = choosenbook.volumeInfo.language
   }
-  if(choosenbook.volumeInfo.industryIdentifiers != undefined) {
-            // console.log("ISBN")
+  if (choosenbook.volumeInfo.industryIdentifiers != undefined) {
     if (choosenbook.volumeInfo.industryIdentifiers[0] != undefined) {
       isbn = choosenbook.volumeInfo.industryIdentifiers[0].identifier
     }
-            // console.log("ISBN13")
     if (choosenbook.volumeInfo.industryIdentifiers[1] != undefined) {
       isbn13 = choosenbook.volumeInfo.industryIdentifiers[1].identifier
     }
   }
-          // console.log("EBOOK")
-  if(choosenbook.saleInfo.isEbook != undefined) {
-    if (choosenbook.saleInfo.isEbook == true ) {
-      ebook = "EBOOK";
+  if (choosenbook.saleInfo.isEbook != undefined) {
+    if (choosenbook.saleInfo.isEbook == true) {
+      ebook = "EBOOK"
     }
   }
-  noteTitle=writer + " - " + title + " - " + publishedDate
+  noteTitle = writer + " - " + title + " - " + publishedDate
   computedValues.buchtitel = title
   computedValues.buchuntertitel = subtitle
   computedValues.buchautor = writer
@@ -245,6853 +722,1915 @@ async function cbkAskGoogleForTitle(noteName, noteType, noteSetting, tp, app, co
   computedValues.buchisbn = isbn
   computedValues.buchisbn13 = isbn13
   computedValues.buchebook = ebook
-    /*
-    console.log(computedValues.buchtitel)
-    console.log(computedValues.buchuntertitel)
-    console.log(computedValues.buchautor)
-    console.log(computedValues.buchautorv)
-    console.log(computedValues.buchdatum)
-    console.log(computedValues.buchverlag)
-    console.log(computedValues.buchseiten)
-    console.log(computedValues.buchsprache)
-    console.log(computedValues.buchisbn)
-    console.log(computedValues.buchisbn13)
-    console.log(computedValues.buchebook)
-  */
-  let adaptedTitle = noteTitle.replace(/:/g," ")
-  noteTitle = adaptedTitle.replace(/\//g,"")
-  console.log("NOTETITLE: " + noteTitle);
+  let adaptedTitle = noteTitle.replace(/:/g, " ")
+  noteTitle = adaptedTitle.replace(/\//g, "")
   return noteTitle
 }
 function isMok(noteName, tp) {
   let answer = false
   let path = tp.file.path(true)
   let parts = path.split("\\")
-  if(parts.length < 2) { parts = path.split("/") }
-  if(parts.length > 1 && parts[parts.length-2] == noteName) {
+  if (parts.length < 2) {
+    parts = path.split("/")
+  }
+  if (parts.length > 1 && parts[parts.length - 2] == noteName) {
     answer = true
   }
   return answer
 }
-function isCatalog(noteName,noteSetting) {
+function isCatalog(noteName, noteSetting) {
   let answer = false
-  let mocstring = noteSetting.getValue("mocstring")
-  if(noteName.startsWith(mocstring)) {
+  let mocstring = noteSetting.valueOf('mocstring') // getValue
+  if (noteName.startsWith(mocstring)) {
     answer = true
-    console.log("ist katalog")
   }
   return answer
 }
 function cbkMaterialCssClasses(noteName, noteType, noteSetting, tp, app) {
-  if(isMok(noteName, tp)) return "foldernote"
-  else if(isCatalog(noteName,noteSetting)) return "catalog"
+  console.log('Unused? Callback MaterialCssClasses')
+  if (isMok(noteName, tp)) return "foldernote"
+  else if (isCatalog(noteName, noteSetting)) return "catalog"
   else return cbkFmtCssClasses(noteName, noteType, noteSetting, tp, app)
 }
 function cbkMaterialDateCreated(noteName, noteType, noteSetting, tp, app) {
-  if(isMok(noteName, tp)) return "!no!"
-  else return cbkFmtCreated(noteName, noteType, noteSetting, tp, app)
+  console.log('Unused? Callback MaterialDateCreated')
+  if (isMok(noteName, tp)) return "!no!"
+  else return cbkFmtNow(noteName, noteType, noteSetting, tp, app)
 }
 function cbkMaterialPublish(noteName, noteType, noteSetting, tp, app) {
-  if(isMok(noteName, tp)) return "!no!"
+  console.log('Unused? Callback MaterialPublish')
+  if (isMok(noteName, tp)) return "!no!"
   else return true
 }
 function cbkMaterialTags(noteName, noteType, noteSetting, tp, app) {
-  if(isMok(noteName, tp)) return "MOC"
+  console.log('Unused? Callback MaterialTags')
+  if (isMok(noteName, tp)) return "MOC"
   else return "[]"
 }
 function cbkMaterialDdcKey(noteName, noteType, noteSetting, tp, app) {
-  if(isMok(noteName, tp)) return "!no!"
-  else if(isCatalog(noteName,noteSetting)) return "!no!"
+  console.log('Unused? Callback MaterialDdcKey')
+  if (isMok(noteName, tp)) return "!no!"
+  else if (isCatalog(noteName, noteSetting)) return "!no!"
   else return ""
 }
 function cbkMaterialMedia(noteName, noteType, noteSetting, tp, app) {
-  if(isMok(noteName, tp)) return "!no!"
-  else if(isCatalog(noteName,noteSetting)) return "!no!"
+  console.log('Unused? Callback MaterialMedia')
+  if (isMok(noteName, tp)) return "!no!"
+  else if (isCatalog(noteName, noteSetting)) return "!no!"
   else return "video"
 }
 function cbkMaterialAuthor(noteName, noteType, noteSetting, tp, app) {
-  if(isMok(noteName, tp)) return "!no!"
+  console.log('Unused? Callback MaterialAuthor')
+  if (isMok(noteName, tp)) return "!no!"
   else return "Ueberphilosophy"
 }
 function cbkMaterialSndLine(noteName, noteType, noteSetting, tp, app) {
-  // Das Waypoint Plugin schreibt bei korrektem Kommentar Errormeldung in DIESE !js! Datei
-  if(isMok(noteName, tp)) return "% Waypoint %%" 
-  else if(isCatalog(noteName,noteSetting)) {
+  console.log('Unused? Callback MaterialSndLine')
+  if (isMok(noteName, tp)) return "% Waypoint %%"
+  else if (isCatalog(noteName, noteSetting)) {
     let path = tp.file.path(true)
     let parts = path.split("\\")
-    if(parts.length < 2) { parts = path.split("/") }
-    if(parts.length > 1) {
+    if (parts.length < 2) {
+      parts = path.split("/")
+    }
+    if (parts.length > 1) {
       let heading = ""
-      for(let i = 1; i < parts.length; i++) {
+      for (let i = 1; i < parts.length; i++) {
         heading += "#"
       }
-      return heading + " " + parts[parts.length-2]
+      return heading + " " + parts[parts.length - 2]
     } else {
       return ""
     }
-  }
-  else return "## []()"
+  } else return "## []()"
 }
 function cbkMaterialThrdLine(noteName, noteType, noteSetting, tp, app) {
-  if(isMok(noteName, tp)) return ""
-  else if(isCatalog(noteName,noteSetting)) {
-    return "```dataviewjs\nawait dv.executeJs(await dv.io.load(\"Materialien/catalog.js\"));\n```"
-  }
-  else return "#speaker/  #wird_fortgesetzt\n"
+  console.log('Unused? Callback MaterialThrdLine')
+  if (isMok(noteName, tp)) return ""
+  else if (isCatalog(noteName, noteSetting)) {
+    return '```dataviewjs\nawait dv.executeJs(await dv.io.load("Materialien/catalog.js"));\n```'
+  } else return "#speaker/  #wird_fortgesetzt\n"
 }
 function cbkMaterialFourthLine(noteName, noteType, noteSetting, tp, app) {
-  if(isMok(noteName, tp)) return ""
-  else if(isCatalog(noteName,noteSetting)) return ""
+  console.log('Unused? Callback MaterialFourthLine')
+  if (isMok(noteName, tp)) return ""
+  else if (isCatalog(noteName, noteSetting)) return ""
   else return cbkMitschrift(noteName, noteType, noteSetting, tp, app)
 }
 function cbkMaterialFifthLine(noteName, noteType, noteSetting, tp, app) {
-  if(isMok(noteName, tp)) return ""
-  else if(isCatalog(noteName,noteSetting)) return ""
+  console.log('Unused? Callback MaterialFifthLine')
+  if (isMok(noteName, tp)) return ""
+  else if (isCatalog(noteName, noteSetting)) return ""
   else return "- []()"
 }
 function cbkMaterialLastLine(noteName, noteType, noteSetting, tp, app) {
-  if(isMok(noteName, tp)) return ""
-  else if(isCatalog(noteName,noteSetting)) return ""
+  console.log('Unused? Callback MaterialLastLine')
+  if (isMok(noteName, tp)) return ""
+  else if (isCatalog(noteName, noteSetting)) return ""
   else return cbkFmtLastLine(noteName, noteType, noteSetting, tp, app)
 }
 function cbkScriptLineFeld(noteName, noteType, noteSetting, tp, app) {
+  console.log('Unused? Callback ScriptLineFeld')
   return ""
 }
 function cbkFrstLineFeld(noteName, noteType, noteSetting, tp, app) {
-  return noteName + " #" + noteName;
+  console.log('Unused? Callback FrstLineFeld')
+  return noteName + " #" + noteName
 }
 function cbkSndLineFeld(noteName, noteType, noteSetting, tp, app) {
-  return "## Zeitliche Einordnung\n![[zeitliche Einordnung]]\n## Quellen\n![["+noteName+" Quellen]]"
+  console.log('Unused? Callback SndLineFeld')
+  return "## Zeitliche Einordnung\n![[zeitliche Einordnung]]\n## Quellen\n![[" + noteName + " Quellen]]"
 }
 function cbkThrdLineFeld(noteName, noteType, noteSetting, tp, app) {
-  return "## Adamson\n![[Adamson nnn "+noteName+"]]\n## Weitere"
+  console.log('Unused? Callback ThrdLineFeld')
+  return "## Adamson\n![[Adamson nnn " + noteName + "]]\n## Weitere"
 }
-
 function cbkMitschrift(noteName, noteType, noteSetting, tp, app) {
-  return "[[Werkstatt/Mitschriften/@"+noteName+"|Mitschrift]]\n"
-}
-function cbkFmtLastLine(noteName, noteType, noteSetting, tp, app) {
-  let lastline="## -footnotes"
-  let mocstring = noteSetting.getValue("mocstring")
-  if(noteName.startsWith(mocstring)) {
-    lastline = ""
-  }
-  return lastline
+  console.log('Unused? Callback Mitschrift')
+  return "[[Werkstatt/Mitschriften/@" + noteName + "|Mitschrift]]\n"
 }
 function cbkAutorTag(noteName, noteType, noteSetting, tp, app) {
-  return noteName.replace(/ /g, '-');
+  console.log('Unused? Callback AutorTag')
+  return noteName.replace(/ /g, "-")
 }
 function cbkTimeLine(noteName, noteType, noteSetting, tp, app) {
-  return "[[timeline#"+noteName+"|Zeitleiste]]"
+  console.log('Unused? Callback TimeLine')
+  return "[[timeline#" + noteName + "|Zeitleiste]]"
 }
 function cbkSekundaerName(noteName, noteType, noteSetting, tp, app) {
-  return noteName+" Sekundaer";
-}
-function cbkSndLineMitschrift(noteName, noteType, noteSetting, tp, app) {
-  return "zu [[" + noteName + "]]"
+  console.log('Unused? Callback SekundaerName')
+  return noteName + " Sekundaer"
 }
 function cbkTest(noteName, noteType, noteSetting, tp, app) {
+  console.log('Unused? Callback Test')
   return "yyyy"
 }
 function cbkFmtOneAlias(noteName, noteType, noteSetting, tp, app) {
+  console.log('Unused? Callback FmtOneAlias')
   let alias = noteName
-  let mocstring = noteSetting.getValue("mocstring")
-  if(noteName.startsWith(mocstring)) {
+  let mocstring = noteSetting.valueOf('mocstring') // getValue
+  if (noteName.startsWith(mocstring)) {
     alias = noteName.slice(mocstring.length)
   }
   alias = alias.replace(/,/g, ` `).replace(/  /g, ` `)
-
-  if(0 == alias.localeCompare(noteName)) {
-    alias=""
+  if (0 == alias.localeCompare(noteName)) {
+    alias = ""
   }
   return alias
 }
 function cbkFmtOneAliasSwitch(noteName, noteType, noteSetting, tp, app) {
+  console.log('Unused? Callback FmtOneAliasSwitch')
   let alias = noteName
-  let mocstring = noteSetting.getValue("mocstring")
-  if(noteName.startsWith(mocstring)) {
+  let mocstring = noteSetting.valueOf('mocstring') // getValue
+  if (noteName.startsWith(mocstring)) {
     alias = noteName.slice(mocstring.length)
   }
-  let idx1=alias.indexOf(",")
-  let idx2=alias.indexOf(",",idx1+1)
-  if(idx2 < 1) idx2 = alias.length-1
-  if(idx1 > 0 && idx2 > 0) {
-    let part1=alias.substring(0,idx1)
-    let part2=alias.substring(idx1+1,idx2)
+  let idx1 = alias.indexOf(",")
+  let idx2 = alias.indexOf(",", idx1 + 1)
+  if (idx2 < 1) idx2 = alias.length - 1
+  if (idx1 > 0 && idx2 > 0) {
+    let part1 = alias.substring(0, idx1)
+    let part2 = alias.substring(idx1 + 1, idx2)
     let zwi = "xxxx"
-    alias=alias.replace(part1,zwi)
-    alias=alias.replace(part2,part1)
-    alias=alias.replace(zwi,part2)
+    alias = alias.replace(part1, zwi)
+    alias = alias.replace(part2, part1)
+    alias = alias.replace(zwi, part2)
   }
   alias = alias.replace(/,/g, ` `).replace(/  /g, ` `)
-
-  if(0 == alias.localeCompare(noteName)) {
-    alias=""
+  if (0 == alias.localeCompare(noteName)) {
+    alias = ""
   }
   return alias
 }
-/** Returns sibling with next/prev date, depending on {@link next}
- *
- * @param {*} next
- * @param {*} tp
- * @param {*} app
- * @param {*} noteSetting
- * @returns {*}
- */
 function findSibling(next, tp, app, noteSetting) {
   function hasDate(fname, dateformat) {
     let matchstring = dateformat
-    matchstring = matchstring.replaceAll("Y","[0-9]")
-    matchstring = matchstring.replaceAll("M","[0-9]")
-    matchstring = matchstring.replaceAll("D","[0-9]")
+    matchstring = matchstring.replaceAll("Y", "[0-9]")
+    matchstring = matchstring.replaceAll("M", "[0-9]")
+    matchstring = matchstring.replaceAll("D", "[0-9]")
     let answer = fname.match(matchstring)
     return answer == null ? false : true
   }
-  let dateformat = noteSetting.getValue("title_date_format")
-  let currentFile /* TFile */ = app.workspace.getActiveFile();
-  let currentFileName = currentFile.name;
-  let currentFolder /* TFolder */ = currentFile.parent;
-  let currentFolderPath /* string */ = currentFolder.path;
-  text = "";
-  let prevFile /*TFile*/= null;
-  let nextFile /*TFile*/= null;
-  const siblings = app.vault.getAbstractFileByPath(currentFolderPath).children;
-  siblings.forEach((file) => {
-    if(hasDate(file.name, dateformat) && file.name != currentFileName) {
-      if(file.name > currentFileName) {
-        if(nextFile == null) {
-          nextFile = file;
+  let dateformat = noteSetting.valueOf('title_date_format') // getValue
+  let currentFile = app.workspace.getActiveFile()
+  let currentFileName = currentFile.name
+  let currentFolder = currentFile.parent
+  let currentFolderPath = currentFolder.path
+  text = ""
+  let prevFile = null
+  let nextFile = null
+  const siblings = app.vault.getAbstractFileByPath(currentFolderPath).children
+  siblings.forEach(file => {
+    if (hasDate(file.name, dateformat) && file.name != currentFileName) {
+      if (file.name > currentFileName) {
+        if (nextFile == null) {
+          nextFile = file
         } else {
-          if(file.name < nextFile.name) {
-            nextFile = file;
+          if (file.name < nextFile.name) {
+            nextFile = file
           }
         }
-      } else if(file.name < currentFileName) {
-        if(prevFile == null) {
-          prevFile = file;
+      } else if (file.name < currentFileName) {
+        if (prevFile == null) {
+          prevFile = file
         } else {
-          if(file.name > prevFile.name) {
-            prevFile = file;
+          if (file.name > prevFile.name) {
+            prevFile = file
           }
-
         }
       }
     }
-  });
+  })
   let answerFile = next === true ? nextFile : prevFile
   let answer = ""
-  if(answerFile != null) {
-    answer = app.fileManager.generateMarkdownLink(answerFile,currentFolderPath+"/")
+  if (answerFile != null) {
+    answer = app.fileManager.generateMarkdownLink(answerFile, currentFolderPath + "/")
   } else if (next == true) {
-    answer = app.fileManager.generateMarkdownLink(currentFile,currentFolderPath+"/")
+    answer = app.fileManager.generateMarkdownLink(currentFile, currentFolderPath + "/")
     let tomorrow = tp.date.tomorrow(dateformat)
     let today = tp.date.now(dateformat)
-    answer = answer.replaceAll(today,tomorrow)
+    answer = answer.replaceAll(today, tomorrow)
   }
   return answer
 }
-/** callback to create frontmatter value
- * @callback FrontmatterCallback
- * @param {String} noteName
- * @param {String} noteType
- * @param {Setting} noteSetting
- * @param {Object} tp - templater object
- * @param {Object} app - Obsidian App object
- * @returns {(String|Array.<String>)}
- */
-/** {@link FrontmatterCallback}, => title using "title_before_date" and "title_date_format"
- * @type {FrontmatterCallback}
- * @param {Object} tp - templater object
- * @param {String} noteName
- * @param {String} noteType
- * @param {String} noteSetting
- * @param {Object} app - Obsidian App object
- * @returns {String}
- */
 function cbkCalcDateTitle(noteName, noteType, noteSetting, tp, app) {
-  let title_before_date = noteSetting.getValue("title_before_date")
-  if(title_before_date == undefined) title_before_date = ""
-  let title_date_format = noteSetting.getValue("title_date_format")
-  if(title_date_format == undefined) title_date_format = "YY-MM-DD"
+  console.log('Unused? Callback CalcDateTitle')
+  let title_before_date = noteSetting.valueOf('title_before_date') // getValue
+  if (title_before_date == undefined) title_before_date = ""
+  let title_date_format = noteSetting.valueOf('title_date_format') // getValue
+  if (title_date_format == undefined) title_date_format = "YY-MM-DD"
   let name = title_before_date + tp.date.now(title_date_format)
   return name
 }
-/** {@link FrontmatterCallback}, returns alias values
- * @type {FrontmatterCallback}
- * @param {Object} tp - templater object
- * @param {String} noteName
- * @param {String} noteType
- * @param {String} noteSetting
- * @param {Object} app - Obsidian App object
- * @returns {(String|Array.<String>)}
- */
 function cbkFmtAlias(noteName, noteType, noteSetting, tp, app) {
-  let aliases=[]
+  console.log('Unused? Callback FmtAlias')
+  let aliases = []
   let alias = noteName
-  let mocstring = noteSetting.getValue("mocstring")
-  if(noteName.startsWith(mocstring)) {
+  let mocstring = noteSetting.valueOf('mocstring') // getValue
+  if (noteName.startsWith(mocstring)) {
     alias = noteName.slice(mocstring.length)
   }
   alias = alias.replace(/,/g, ` `).replace(/  /g, ` `)
-
-  if(0 != alias.localeCompare(noteName)) {
+  if (0 != alias.localeCompare(noteName)) {
     aliases.push(alias)
   }
   return aliases
 }
-/** {@link FrontmatterCallback}, returns tags values
- * @type {FrontmatterCallback}
- * @param {Object} tp - templater object
- * @param {String} noteName
- * @param {String} noteType
- * @param {String} noteSetting
- * @param {Object} app - Obsidian App object
- * @returns {(String|Array.<String>)}
- */
 function cbkFmtTags(noteName, noteType, noteSetting, tp, app) {
-  let tags=[]
-  let mocstring = noteSetting.getValue("mocstring")
-  let tag_pre = noteSetting.getValue("tag_pre")
+  console.log('Unused? Callback FmtTags')
+  let tags = []
+  let mocstring = noteSetting.valueOf('mocstring') // getValue
+  let tag_pre = noteSetting.valueOf('tag_pre') // getValue
   tags.push(tag_pre + noteType.charAt(0).toUpperCase() + noteType.slice(1))
-  if(noteName.startsWith(mocstring))
-    tags.push(tag_pre + "moc")
+  if (noteName.startsWith(mocstring)) tags.push(tag_pre + "moc")
   return tags
 }
-/** {@link FrontmatterCallback}, returns date value
- * @type {FrontmatterCallback}
- * @param {Object} tp - templater object
- * @param {String} noteName
- * @param {String} noteType
- * @param {String} noteSetting
- * @param {Object} app - Obsidian App object
- * @returns {String}
- */
-function cbkFmtCreated(noteName, noteType, noteSetting, tp, app) {
-  let format = noteSetting.getValue("date_created_date_format")
-  if(format == "")
-    format = undefined
-
-  return tp.date.now(format)
-}
-/** {@link FrontmatterCallback}, returns cssClasses
- * @type {FrontmatterCallback}
- * @param {Object} tp - templater object
- * @param {String} noteName
- * @param {String} noteType
- * @param {String} noteSetting
- * @param {Object} app - Obsidian App object
- * @returns {String}
- */
-function cbkFmtCssClasses(noteName, noteType, noteSetting, tp, app) {
-  let cssClasses = []
-  cssClasses.push(noteType)
-  return cssClasses
-}
-/** {@link FrontmatterCallback}, returns noteType
- * @type {FrontmatterCallback}
- * @param {Object} tp - templater object
- * @param {String} noteName
- * @param {String} noteType
- * @param {String} noteSetting
- * @param {Object} app - Obsidian App object
- * @returns {String}
- */
-function cbkNoteType(noteName, noteType, noteSetting, tp, app) {
-  return noteType
-}
-/** {@link FrontmatterCallback}, returns semantic noteName (not title)
- * @type {FrontmatterCallback}
- * @param {Object} tp - templater object
- * @param {String} noteName
- * @param {String} noteType
- * @param {String} noteSetting
- * @param {Object} app - Obsidian App object
- * @returns {String}
- */
-function cbkNoteName(noteName, noteType, noteSetting, tp, app) {
-  let mocstring = noteSetting.getValue("mocstring")
-  let name_end = ""
-  let marker = ""
-  if(typeof noteSetting == "object") {
-    name_end = noteSetting.getValue("name_end")
-    marker = noteSetting.getValue("marker")
-  }
-  if(name_end == undefined) {
-    name_end = ""
-  }
-  if(marker == undefined) {
-    marker = ""
-  }
-  if(noteName.startsWith(mocstring)) {
-    return noteName.slice(mocstring.length)
-  } else {
-    return noteName
-  }
-}
-/** {@link FrontmatterCallback}, returns link to prev diary file
- * @type {FrontmatterCallback}
- * @param {Object} tp - templater object
- * @param {String} noteName
- * @param {String} noteType
- * @param {String} noteSetting
- * @param {Object} app - Obsidian App object
- * @returns {String}
- */
 function cbkPrevDateLink(noteName, noteType, noteSetting, tp, app) {
-  let prevLink=findSibling(false, tp, app, noteSetting)
+  console.log('Unused? Callback PrevDateLink')
+  let prevLink = findSibling(false, tp, app, noteSetting)
   let answer = prevLink
   return answer
 }
-/** {@link FrontmatterCallback}, returns link to next diary file
- * @type {FrontmatterCallback}
- * @param {Object} tp - templater object
- * @param {String} noteName
- * @param {String} noteType
- * @param {String} noteSetting
- * @param {Object} app - Obsidian App object
- * @returns {String}
- */
 function cbkNextDateLink(noteName, noteType, noteSetting, tp, app) {
-  let nextLink=findSibling(true, tp, app, noteSetting)
+  console.log('Unused? Callback NextDateLink')
+  let nextLink = findSibling(true, tp, app, noteSetting)
   let answer = nextLink
   return answer
 }
-//#endregion Configuration callbacks
+/* eslint-enable */
 
-
-// caveat:
-//    Obsidian Preferences Section Appearance
-//      - Show inline title
-//      - Show tab title bar
-//    seem to change the way this template works when creating new unnamed files.
-//    They do not - they change the way, obsidian works on new file creation.
-//    If no inline title and no tab title bar is given, it will pop up a dialog
-//    asking for a filename.
-//    If no inline title but tab title bar is given, one has to press return
-//    after new file creation.
-//    See following post, which describes the solution
-//    https://forum.obsidian.md/t/templater-triggering-before-choosing-files-title/52968/11
-//    and the containing thread, which describes the problem.
-//#region USER CONFIGURATION
-//prettier-ignore
-let user_configuration_original = {
-  // General section has to be the first section
-  SECTION_GENERAL: //localType: (Number|String|Boolean)
-  {
-    LANGUAGE: "de", // hardcoded:FALLBACK_LANGUAGE "en"
-  },
-  SECTION_TRANSLATE: //localType: (String|Array.<String>|Array.<Array.<String>>)
-  {
-    NAME_PROMPT:         [ ["en", "Pure Name of Note"], ["de", "Name der Notiz (ohne Kenner/Marker)"] ],
-    TYPE_PROMPT:         [ ["en", "Choose type"], ["de", "Typ wählen"] ],
-      // !! Has to be set correctly to name of untitled files in your vault
-    TITLE_NEW_FILE:      [ ["en", "Untitled"], ["de", "Unbenannt"] ],
-  },
-  SECTION_DIALOG: //localType: (Number|Boolean|Array.<Number>|Array.<Boolean>)
-  {
-    TYPE_MAX_ENTRIES: 10, // Max entries in select type dialog
-  },
-  SECTION_NOTETYPES:
-  {
-    __SPEC: {DEFAULT: "note"},// If DEFAULT not/wrong set, first unrepeated is default
-    defaults: {
-      __SPEC: {REPEAT: true},
-      mocstring:          {__SPEC:false, DEFAULT:"_",TYPE:"String", },
-      marker:             {__SPEC:false, DEFAULT:"",TYPE:"String", },
-      name_end:           {__SPEC:false, DEFAULT:"",TYPE:"String", },
-      title_date_function:{__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
-      title_before_date:  {__SPEC:false, DEFAULT:"",TYPE:"String", },
-      title_date_format:  {__SPEC:false, DEFAULT:"YY-MM-DD",TYPE:"Date", },
-      folders:            {__SPEC:false, IGNORE:true,DEFAULT:[""],TYPE:"(Array.<String>)"},
-      tag_pre:            {__SPEC:false, DEFAULT:"0/",TYPE:"String", },
-      name_prompt:        {__SPEC:false, DEFAULT:"",TYPE:"String", },
-      create_same_named_file: {__SPEC:false, DEFAULT: false, TYPE: "Boolean", },
-      date_created_date_format: {__SPEC:false, DEFAULT:"YYYY-MM-DD",TYPE:"Date", },
-      frontmatter: {__SPEC: {RENDER: false,},
-        aliases:          {__SPEC:false, DEFAULT: cbkFmtAlias, TYPE: "(Array.<String>|Function)"},
-        cssclasses:       {__SPEC:false, DEFAULT: cbkFmtCssClasses, TYPE: "(Array.<String>|Function)"},
-        date_created:     {__SPEC:false, DEFAULT: cbkFmtCreated, TYPE: "(Date|Function)", },
-        position:         {__SPEC:false, IGNORE: true, TYPE: "Boolean", },
-        private:          {__SPEC:false, DEFAULT: false, TYPE: "Boolean", },
-        publish:          {__SPEC:false, DEFAULT: false, TYPE: "Boolean", },
-        tags:             {__SPEC:false, DEFAULT: cbkFmtTags, TYPE: "(Array.<String>|Function)",},
-        revised:          {__SPEC:false, DEFAULT: true, TYPE: "Boolean", },
-      },
-      page: { __SPEC: {RENDER: true,},
-        type:             {__SPEC:false, DEFAULT: cbkNoteType, TYPE: "(String|Function)",},
-        pict:             {__SPEC:false, DEFAULT: "", TYPE: "String",},
-        pict_width:       {__SPEC:false, DEFAULT:  0, TYPE: "Number",},
-        prevlink:         {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
-        nextlink:         {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
-        firstline:        {__SPEC:false, DEFAULT: cbkNoteName, TYPE: "(String|Function)",},
-        lastline:         {__SPEC:false, DEFAULT: "## -footnotes", TYPE: "(String|Function)",},
-      },
-    },
-      obsidian:      {
-        folders: ["Obsidian"],
-      },
-      audio:          {
-        marker: "{a}",
-        folders: ["zwischenreich"],
-        name_prompt: "?Podcast/Reihe - Autornachname - Audiotitel ?OPTIONAL /ODER",
-        page: { pict: "/_/_resources/pexels-foteros-352505_15p.jpg", pict_width: 100,},
-      },
-      buch:           {
-        marker: "{b}",
-        folders: ["zwischenreich"],
-        name_prompt: "Autornachname - Buchtitel",
-        //page: { pict: "/_/_resources/pexels-suzyhazelwood-1989704_15p.jpg", pict_width: 100,},
-        page: { pict: "/_/_resources/pexels-ekrulila-2203051_22p.jpg", pict_width: 100,},
-      },
-      exzerpt:        {
-        marker: "$",
-        folders: ["zwischenreich"],
-        name_prompt: "Autornachname - Buchtitel",
-      },
-      mitschrift:        {
-        marker: "@",
-        folders: ["zwischenreich"],
-        name_prompt: "Exakter Titel der Veranstaltung: Titel_der_Vorlesung_Jahr_Institut_Speaker",
-      },
-      ort:            {
-        marker: "&",
-        folders: ["zwischenreich"],
-        page: { pict: "/_/_resources/pexels-dzeninalukac-1563005_10p.jpg", pict_width: 100,
-                firstline: cbkHeaderOrt, },
-        name_prompt: "Ortsname, Land",
-        frontmatter: {aliases: cbkAliasOrt, },
-      },
-      person:         {
-        marker: "=",
-        folders: ["zwischenreich"],
-        page: { pict: "/_/_resources/pexels-lucasandrade-14097235_15p.jpg", pict_width: 100,
-                firstline: cbkHeaderPerson, },
-        name_prompt: "Personnachname, Personvorname, ?Geburtsdatum ?OPTIONAL",
-        frontmatter: {aliases: cbkAliasPerson,},
-      },
-      randnotizen:        {
-        marker: "@",
-        folders: ["zwischenreich"],
-        name_prompt: "Autornachname - Buchtitel",
-      },
-      video:          {
-        marker: "{v}",
-        folders: ["zwischenreich"],
-        page: { pict: "/_/_resources/pexels-vladvictoria-2363675_10p.jpg", pict_width: 100,},
-        name_prompt: "?Reihe - ?Autornachname - Videotitel ?OPTIONAL",
-      },
-      web:            {
-        marker: "{w}",
-        folders: ["zwischenreich"],
-        //page: { pict: "/_/_resources/pexels-marcelo-gonzalez-1141370437-31546060_20p.jpg", pict_width: 100,},      
-        page: { pict: "/_/_resources/pexels-drector-14023912_10p.jpg", pict_width: 100,},
-        name_prompt: "?Autor - Webseitentitel - ?Datum ?OPTIONAL",
-      },
-      zitat:          {
-        marker: "°",
-        folders: ["zwischenreich"],
-        name_prompt: "Titel Autornachname",
-      },
-      zitate:         {
-        marker: "°°",
-        folders: ["zwischenreich"],
-        name_prompt: "Titel Autornachname",
-      },
-      rezept:         {
-        frontmatter: {extra: "breit", },
-        folders: ["Rezepte"],
-        name_prompt: "Name des Gerichts, das das Kochrezept beschreibt",
-      },
-      garten:         {
-        folders: ["Garten", "temp"],
-        name_prompt: "Gartenthema",
-      },
-      pflanze:        {
-        folders: ["Pflanzen"],
-        name_prompt: "Pflanzenname",
-      },
-      gartentagebuch: {
-        title_date_function:  cbkCalcDateTitle,
-        title_before_date: "Garten ",
-        page: { prevlink: cbkPrevDateLink, nextlink: cbkNextDateLink, },
-        folders: ["Gartentagebuch"],
-      },
-      lesetagebuch:   {
-        title_date_function:  cbkCalcDateTitle,
-        title_before_date: "Lesetagebucheintrag ",
-        page: { prevlink: cbkPrevDateLink, nextlink: cbkNextDateLink,
-          firstline: "## ArticleTitle\n[ntvzdf]link\n\n",
-        },
-        folders: ["Lesetagebuch"],
-      },
-      unbedacht:      {
-        date_created_date_format:"dddd, D. MMMM YYYY, H:mm:ss",
-        title_date_format: "YY-MM-DD",
-        title_date_function:  cbkCalcDateTitle,
-        title_before_date: "Unbedacht ",
-        page: { prevlink: cbkPrevDateLink, nextlink: cbkNextDateLink, },
-        folders: ["Unbedacht"],
-        frontmatter: { private: true, },
-      },
-      diary:          {
-        title_date_function:  cbkCalcDateTitle,
-        title_date_format: "YYYY-MM-DD",
-        page: { prevlink: cbkPrevDateLink, nextlink: cbkNextDateLink, },
-        folders: ["Diary", "temp"],
-        frontmatter: { private: true, },
-      },
-      verwaltung:     {
-        folders: ["Verwaltung"],
-        name_prompt: "Verwaltungsthema",
-        frontmatter: { private: true, },
-      },
-      done:           {
-        title_date_function:  cbkCalcDateTitle,
-        title_before_date: "Heute erledigt ",
-        page: { prevlink: cbkPrevDateLink, nextlink: cbkNextDateLink, },
-        folders: ["Done"],
-        frontmatter: { private: true, },
-      },
-      it:             {
-        folders: ["IT"],
-      },
-      cookbook:       {
-        name_end: "_draft",
-        folders: ["Cookbook"],
-        name_prompt: "Receipe, zuerst wird es als Entwurf erstellt",
-        frontmatter: { publish: true, },
-      },
-      blog:       {
-        name_end: "_draft",
-        folders: ["Blog"],
-        name_prompt: "Allgemeiner Blogeintrag, zuerst wird es als Entwurf erstellt",
-        frontmatter: { publish: true, },
-      },
-      software:       {
-        folders: ["Software"],
-        name_prompt: "Name der Software, die beschrieben wird",
-      },
-      linux:          {
-        page: { pict: "/_/_resources/Linux_mascot_tux_80p.png", pict_width: 50,},
-        folders: ["Linux"],
-      },
-      note:           {
-      },
-  },
-}
-user_configuration = user_configuration_original
-//#endregion USER CONFIGURATION
-//#region EXAMPLE CONFIGURATIONS
-// Entries of the default section are defaults for all sibling sections. Name of
-//    default section does not matter, important is REPEAT: true in __SPEC
-//    (Only one REPEAT is supported)
-// mocstring: "Map of Content" (MOC) Marker at the beginning of a filename.
-//    Is part of the semantic notename. Will not be set by foty, but recognized:
-//    callback functions will remove it.
-// marker: String at the beginning of a filename.
-//    Is not part of semantic notename. Will be set by foty.
-// name_end: String at the end of a filename (before extension).
-//    Is not part of semantic notename. Will be set by foty.
-// title_date_function: Callback function to calculate the filename.
-//    If set as function, it will be used for a new note to set filename.
-//    It uses title_before_date and title_date_format
-// title_before_date: String part before date if title_date_function is used
-// title_date_format: Format of the date part if title_date_function is used
-//    Only recogizes uppercase letters D, M, Y
-//    Only accepts formats expanding to pure numbers
-// folders: Names of (sub)folders in which notes of this type will be placed
-//    Pure folder names are accepted and path parts, e.g. whit two folder types
-//    lettrs:{folders: ["Letters"],} and mylettrs:{folders: ["Private/Letters"],}
-//    lettrs will apply to all folders which contain a pathpart "Letters", e.g.
-//    root/Composers/b/Bach/Letters and root/Letters/from but not to folders
-//    which contain the pathpart "Private/Letters", e.g.  root/Private/Letters
-//    there the folder type mylettrs will apply.
-// tag_pre: String to be prepended to every tag created with cbkFmtTags
-// name_promt: Prompt to be used when asking for notename
-//    Replaces the default prompt hardcoded as NAME_PROMPT in SECTION_TRANSLATE
-// create_same_named_files: Same named files will be created appending a number
-//    Default is false. If set to true linking to prev date file will work wrong.
-// date_created_date_format: Dateformat for cbkFmtCreated, used for date_created
-//    Default if not set is Templaters Default "YYYY-MM-DD"
-// frontmatter: Name does not matter, important is RENDER: false in __SPEC
-//    Has to be same name as in notetypes, to get defaults copied.
-//    Each entry is sent to the template as key value pair before the
-//    key "____" is sent.
-//    aliases: Array of string
-//        Function cbkFmtAlias notename, mocstring removed  and "," replaced with blank
-//    cssclasses: Array of string
-//        Function cbkFmtCssClasses returns notType in array
-//    date_created: Date
-//        cbkFmtCreated returns current date, respecting
-//    position:
-//    private:
-//    publish:
-//    tags: Array of strings
-//       Function cbkFmtTags returns type, first letter uppercase
-//       and "moc" if mocstring is set and filename starts with mocstring.
-//       Each tag in array will be prepended by String in tag_pre.
-// page: Name does not matter, important is RENDER: true in __SPEC
-//    Has to be same name as in notetypes, to get defaults copied.
-//    Each entry is sent to the template as key value pair after the
-//    key "____" is sent.
-//    type:
-//    pict:
-//    pict_width:
-//    prevlink:
-//    nextlink:
-//    firstline:
-//    lastline:
-//prettier-ignore
-let example_configuration1 = {
-  SECTION_NOTETYPES: {
-    note: {
-      marker: "{w}",
-      yaml: {__SPEC: {RENDER: false,}, aliases: cbkAliasOrt, borgia: "Lucrezia", },
-      show: {__SPEC: {RENDER: true,}, firstline: "DAS WORT", fugger: true, },
-    },
-  }
-}
-//user_configuration = example_configuration1
-
-let example_configuration2 = {
-  SECTION_TRANSLATE: { TITLE_NEW_FILE: "Unbenannt",  },
-  SECTION_NOTETYPES: {
-    fueralle: {
-      __SPEC: {REPEAT: true},
-      yaml: {__SPEC: {RENDER: false,},
-        aliases:   {__SPEC:false, DEFAULT: cbkAliasOrt, TYPE: "(Array.<String>|Function)"},
-        borgia:    {__SPEC:false, DEFAULT: "Lucrezia", TYPE: "String", },
-      },
-      show: { __SPEC: {RENDER: true,},
-        firstline: {__SPEC:false, DEFAULT: "DAS WORT", TYPE: "String",},
-        fugger:    {__SPEC:false, DEFAULT: true, TYPE: "Boolean",},
-      },
-    },
-    alt: { folders: ["alt", "antik"], show: { lastline: "ALT", type:"alt"} },
-    note: { marker: "{w}", folders: ["temp"], show: { type:"note"} },
-  }
-}
-//user_configuration = example_configuration2
-
-let example_configuration3 = {
-  SECTION_TRANSLATE: { TITLE_NEW_FILE: "Unbenannt",  },
-  SECTION_NOTETYPES: {
-    defaults: {
-      __SPEC: {REPEAT: true},
-      yaml: {__SPEC: {RENDER: false,},
-        publish:          {__SPEC:false, DEFAULT: true, TYPE: "Boolean", },
-      },
-      show: { __SPEC: {RENDER: true,},
-        type:      {__SPEC:false, DEFAULT: cbkNoteType, TYPE: "(String|Function)",},
-        firstline: {__SPEC:false, DEFAULT: "First Line", TYPE: "String",},
-        lastline: {__SPEC:false, DEFAULT: "##Footnotes", TYPE: "String",},
-      },
-    },
-    book: { folders: ["book"], },
-    test: { folders: ["test"], yaml: { publish: false, }, },
-  }
-}
-//user_configuration = example_configuration3
-//#endregion EXAMPLE CONFIGURATIONS
-
-//#region SCHULE CONFIGURATIONS
-// Eine erweiterte Konfiguration, die die neuen Features:
-// 1) Foldertype mit Pfad und
-// 2) Kommunikation zwischen den Callback Funktionen.
-// verwendet.
-//
-// zu 1) Neue Notizen in XXXStutiis/Mitschriften werden mit dem Foldertype
-// stuttiismitschrift erstellt und neue Notizen in allen anderen Verzeichnissen,
-// die "Mitschriften" als Pfadbestandteil enthalten mit dem Foldertype
-// werkstattmitschrift. Die Notizen haben unterschiedliche YAML.
-//
-// zu 2) Die Callbackfunktionen haben nun einen optionalen 6. Paramter, ein
-// Objekt, in das sie Eigenschaften schreiben können oder die lesen können, die
-// andere Callback Funktionen gesetzt haben.
-// Die title_date_function cbkAskGoogleForTitle erfrägt von google books
-// eine Liste von bis zu 30 Büchern zu den vom Nutzer gegebenen Suchangaben. Der
-// Nutzer wählt davon ein Buch aus. Aus den Werten dieses ausgewählten Buches
-// sollen später in verschiedenen Callback Funktionen verschiedene YAML Einträge
-// gebildet werden. All diese Werte trägt cbkAskGoogleForTitle als Properties
-// in den 6. Parameter ein. Die anderen Callback Funktionen cbkBuchTitel,
-// cbkBuchAutor, cbkBuchVerlag lesen die Information, die sie brauchen aus
-// dem Objekt und übergeben sie ans YAML.
-// Anmerkung: Dieser Parameter ist immer da, auch wenn nicht alle Funktionen ihn
-// angeben. In Javascript kann man Parameter, die man nicht braucht weglassen.
-let schule_configuration = {
-  // General section has to be the first section
-  SECTION_GENERAL: {
-    LANGUAGE: "de", // hardcoded:FALLBACK_LANGUAGE "en"
-  },
-  SECTION_TRANSLATE: {
-    TITLE_NEW_FILE:      [ ["en", "Untitled"], ["de", "Unbenannt"] ],
-  },
-  SECTION_NOTETYPES: {
-    __SPEC: {DEFAULT: "note"},
-    defaults: {
-      __SPEC: {REPEAT: true},
-      mocstring:          {__SPEC:false, DEFAULT:"-",TYPE:"String", },
-      schoolyaml: {__SPEC: {RENDER: false,},
-                          // returns Name of the note type
-        cssclasses:       {__SPEC:false, DEFAULT: cbkFmtCssClasses, TYPE: "(Array.<String>|Function)"},
-        date_created:     {__SPEC:false, DEFAULT: cbkFmtCreated, TYPE: "(Date|Function)", },
-        // /* schule_public */  author:           {__SPEC:false, DEFAULT: "", TYPE: "String", },
-        /* schule_private */ author:           {__SPEC:false, DEFAULT: "Ueberphilosophy", TYPE: "String", },
-        publish:          {__SPEC:false, DEFAULT: true, TYPE: "Boolean", },
-        tags:             {__SPEC:false, DEFAULT: "[]", TYPE: "(String|Array.<String>|Function)",},
-      },
-      schoolshow: { __SPEC: {RENDER: true,},
-        type:             {__SPEC:false, DEFAULT: cbkNoteType, TYPE: "(String|Function)",},
-        prevlink:         {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
-        nextlink:         {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
-        scriptline:       {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
-        firstline:        {__SPEC:false, DEFAULT: cbkNoteName, TYPE: "(String|Function)",},
-        sndline:          {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
-        thrdline:         {__SPEC:false, DEFAULT: "", TYPE: "(String|Function)",},
-        lastline:         {__SPEC:false, DEFAULT: cbkFmtLastLine, TYPE: "(String|Function)",},
-      },
-    },
-    note:                 { // note
-      schoolyaml: { },
-      schoolshow: { },
-    },
-    diary:                { // diary
-      folders: ["Diary", ],
-      title_date_function:  cbkCalcDateTitle,
-      title_date_format: "YYYY-MM-DD",
-      schoolyaml: { publish: false, },
-      schoolshow: {
-        prevlink:  cbkPrevDateLink,
-        nextlink:  cbkNextDateLink,
-        firstline: cbkNoteName,
-        sndline:   "## ",
-      },
-    },
-    material:             { // foldernote, catalog, material
-      folders: ["Materialien", ],
-      name_prompt: "Titel_der_Vorlesung_Jahr_Institut_Speaker",
-      schoolyaml: {
-        cssclasses:   cbkMaterialCssClasses,
-        date_created: cbkMaterialDateCreated,
-        publish:      cbkMaterialPublish,
-        tags:         cbkMaterialTags,
-        ddckey:       cbkMaterialDdcKey,
-        media:        cbkMaterialMedia,
-        author:       cbkMaterialAuthor,
-      },
-      schoolshow: {
-        scriptline: "```dataviewjs\ndv.executeJs(await dv.io.load(\"Materialien/breadcrumbs.js\"));\n```",
-        sndline:     cbkMaterialSndLine,
-        thrdline:    cbkMaterialThrdLine,
-        fourthline:  cbkMaterialFourthLine,
-        fifthline:   cbkMaterialFifthLine,
-        lastline:    cbkMaterialLastLine,
-      },
-    },
-    autor:                { // autor
-      folders: ["Autoren",],
-      name_prompt: "Autornachname",
-      name_end: " Quellen",
-      schoolyaml: {
-        ddckey:  {__SPEC:false, VALUE: "", TYPE: "Number", },
-        gndkey:  {__SPEC:false, VALUE: "", TYPE: "Number", },
-        gndlink: {__SPEC:false, VALUE: "", TYPE: "String", },
-        tags:    cbkAutorTag,
-      },
-      schoolshow: {
-        scriptline: "```dataviewjs\ndv.executeJs(await dv.io.load(\"Materialien/breadcrumbs.js\"));\n```\n",
-        firstline: cbkNoteName,
-        sndline:  cbkTimeLine,
-      },
-    },
-    autorsek:             { // sekundaer
-      folders: ["Autoren-Sekundaer",],
-      name_prompt: "Autornachname",
-      name_end: " Sekundaer",
-      schoolyaml: {
-        cssclasses: "sekundaer",
-        tags:    cbkAutorTag,
-      },
-      schoolshow: {
-        scriptline: "```dataviewjs\ndv.executeJs(await dv.io.load(\"Materialien/breadcrumbs.js\"));\n```\n",
-        firstline: cbkSekundaerName,
-      },
-    },
-    feld:                 { // feld
-      folders: ["Feld"],
-      schoolyaml: {
-        publish: false,
-      },
-      schoolshow: {
-        scriptline: cbkScriptLineFeld,
-        firstline: cbkFrstLineFeld,
-        sndline:   cbkSndLineFeld,
-        thrdline:  cbkThrdLineFeld,
-        lastline:  cbkFmtLastLine,
-      },
-    },
-    stutiis:              { // studies
-      // XXXstutiis/ ist die öffentliche Version von Werkstatt/
-      // Vor der Veröffentlichung wird (priv) Werkstatt/ als .Werkstatt/ versteckt
-      // und XXXstutiis/ zu Werkstatt/ umbenannt
-      folders: ["XXXstutiis"],
-      schoolyaml: {
-        date_created: "",
-        author: "",
-        cssclasses: "studies",
-        publish: false,
-      },
-    },
-    stutiismitschrift:    { // studies @
-      folders: ["XXXstutiis/Mitschriften"],
-      marker: "@",
-      name_prompt: "Exakter Titel der Veranstaltung: Titel_der_Vorlesung_Jahr_Institut_Speaker",
-      schoolyaml: {
-        date_created: "",
-        author: "",
-        cssclasses: "studies",
-        publish: false,
-      },
-      schoolshow: {
-        firstline: "Mitschrift",
-        sndline:   cbkSndLineMitschrift,
-        thrdline:  "## Offen",
-      },
-    },
-    werkstattmitschrift : { // private: werkstatt @, public: studies @
-      folders: ["Mitschriften"],
-      marker: "@",
-      name_prompt: "Exakter Titel der Veranstaltung: Titel_der_Vorlesung_Jahr_Institut_Speaker",
-      schoolyaml: {
-        // /* schule_public */  date_created: "",
-        // /* schule_public */  cssclasses: "studies",
-        /* schule_private */ cssclasses: "werkstatt",
-        publish: false,
-      },
-      schoolshow: {
-        firstline: "Mitschrift",
-        sndline:   cbkSndLineMitschrift,
-        thrdline:  "## Offen",
-      },
-    },
-    audio:                { // audio {a}
-      folders: ["Werkstatt"],
-      marker: "{a}",
-      name_prompt: "OPTIONAL Podcast ODER Reihe - Autornachname - Audiotitel",
-    },
-    buch:                 { // buch {b}
-      folders: ["Werkstatt"],
-      marker: "{b}",
-      name_prompt: "Autornachname - Buchtitel",
-      title_date_function: cbkAskGoogleForTitle,
-      schoolyaml: {
-        tags: cbkBookAliasAsTag,
-        aliases:  cbkBookAlias,
-        buchtitel: cbkBuchTitel,
-        buchuntertitel: cbkBuchUntertitel,
-        buchautor: cbkBuchAutor,
-        buchautorv: cbkBuchAutorv,
-        buchdatum: cbkBuchDatum,
-        buchverlag: cbkBuchVerlag,
-        buchseiten: cbkBuchSeiten,
-        buchsprache: cbkBuchSprache,
-        buchisbn: cbkBuchIsbn,
-        buchisbn13: cbkBuchIsbn13,
-        buchebook: cbkBuchEbook,
-        // ungelesen, gelesen, nochmal, teilweise, aktuell, egal
-        buchstatus: [
-          "egal",
-        ],
-        xbuchstatus: [
-          "gelesen",
-          "aktuell",
-          "teilweise",
-          "nochmal",
-          "ungelesen",
-        ],
-      }
-    },
-    exzerpt:              { // exzerpt $
-      folders: ["Werkstatt"],
-      marker: "$",
-      name_prompt: "Autornachname - Buchtitel",
-    },
-    ort:                  { // ort &
-      folders: ["Werkstatt"],
-      marker: "&",
-      name_prompt: "Ortsname, Land",
-      schoolyaml: {
-        aliases: cbkFmtOneAlias,
-        gndkey:  {__SPEC:false, VALUE: "", TYPE: "Number", },
-        gndlink: {__SPEC:false, VALUE: "", TYPE: "String", },
-      },
-    },
-    person:               { // person =
-      folders: ["Werkstatt"],
-      marker: "=",
-      name_prompt: "Personnachname, Personvorname OPTIONAL , Geburtsdatum",
-      schoolyaml: {
-        aliases: cbkFmtOneAliasSwitch,
-        gndkey:  {__SPEC:false, VALUE: "", TYPE: "Number", },
-        gndlink: {__SPEC:false, VALUE: "", TYPE: "String", },
-      },
-      schoolshow: {
-        pict: "teacher-295387_640-pixabay_2026-01-07.png", 
-        pict_width: 100,
-        firstline: cbkHeaderPerson,
-      }
-    },
-    randnotizen:           { // randnotizen @
-      folders: ["Werkstatt", "Buchmitschriften"],
-      marker: "@",
-      name_prompt: "Autornachname - Buchtitel",
-    },
-    video:                { // video {v}
-      folders: ["Werkstatt"],
-      marker: "{v}",
-      name_prompt: "OPTIONAL Reihe - OPTIONAL Autornachname - Videotitel",
-    },
-    web:                  { // web {w}
-      folders: ["Werkstatt"],
-      marker: "{w}",
-      name_prompt: "OPTIONAL Autor - Webseitentitel - OPTIONAL Datum",
-    },
-    zitat:                { // zitat °
-      folders: ["Werkstatt"],
-      marker: "°",
-      name_prompt: "Titel Autornachname",
-    },
-    zitate:               { // zitate °°
-      folders: ["Werkstatt"],
-      marker: "°°",
-      name_prompt: "Titel Autornachname",
-    },
-  },
-}
-user_configuration = schule_configuration
-//#endregion SCHULE CONFIGURATIONS
-
-//#region globals and externals
-var GLOBAL_SYMBOL_COUNTER = 0
-/**
- * The built in Error object.
+/** The built in Object object
+ * @external Object
+ * @see {@link https://developer.mozilla.org/de/docs/Web/JavaScript/Reference/Global_Objects/Object|Object}
+ */
+/** The built in Error object
  * @external Error
- * @see {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error|Error&#x2348;}
+ * @see {@link https://developer.mozilla.org/de/docs/Web/JavaScript/Reference/Global_Objects/Error|Error}
+ */
+/** The external templater api object
+ * @external templater
+ * @see {@link https://silentvoid13.github.io/Templater/internal-functions/overview.html|templater api}
+ */
+/** The external obsidian app object
+ * @external app
+ * @see {@link https://docs.obsidian.md/Reference/TypeScript+API/App|obsidian app}
  */
 
-// TypesWorker
-const TYPES_WORKER_KEY = "SECTION_NOTETYPES"
-const TYPES_TYPE =
-  "(Number|String|Boolean|Array.<Number>|Array.<String>|Array.<Boolean>|Function)"
-// DialogWorker
-const DIALOG_WORKER_KEY = "SECTION_DIALOG"
-const DIALOG_TYPE = "(Number|Boolean|Array.<Number>|Array.<Boolean>)"
-// LocalizationWorker
-const LOCALIZATION_WORKER_KEY = "SECTION_TRANSLATE"
-const LOCALIZATION_TYPE = "(String|Array.<String>|Array.<Array.<String>>)"
-const FALLBACK_LANGUAGE = "en"
-// GeneralWorker
-const GENERAL_WORKER_KEY = "SECTION_GENERAL"
-const GENERAL_TYPE = "(Number|String|Boolean)"
-// Setting
-const GLOBAL_ROOT_KEY = "/"
-const GLOBAL_SETTING_TYPE =
-  "(Number|String|Boolean|Array.<Number>|Array.<String>|Array.<Boolean>)"
-// BreadCrumbs
-const GLOBAL_BREADCRUMBS_SEPARATOR = " \u00BB "
-// AEssence
-const GLOBAL__SPEC = "__SPEC"
-// Essence
-const GLOBAL_namePartHiddenPropertiesStartWith = "__"
-const GLOBAL_RENDER_DEFAULT = undefined
-const GLOBAL_TYPE_DEFAULT = "String"
-const GLOBAL_DEFAULT_DEFAULT = ""
-const GLOBAL_VALUE_DEFAULT = ""
-const GLOBAL_IGNORE_DEFAULT = false
-const GLOBAL_PARSE_DEFAULT = true
-const GLOBAL_INTERNAL_DEFAULT = false
-const GLOBAL_FLAT_DEFAULT = false
-const GLOBAL_LOCAL_DEFAULT = false
-const GLOBAL_ONCE_DEFAULT = false
-const GLOBAL_REPEAT_DEFAULT = false
-
-//  #region Colors
-/** Color, to be used without quotation marks during development. */
-const white = "white"
-/** Color, to be used without quotation marks during development. */
-const black = "black"
-/** Color, to be used without quotation marks during development. */
-const cyan = "cyan"
-/** Color, to be used without quotation marks during development. */
-const red = "orange"
-/** Color, to be used without quotation marks during development. */
-const rose = "salmon"
-/** Color, to be used without quotation marks during development. */
-const pink = "pink"
-/** Color, to be used without quotation marks during development. */
-const blue = "deepskyblue"
-/** Color, to be used without quotation marks during development. */
-const yellow = "lightgoldenrodyellow"
-/** Color, to be used without quotation marks during development. */
-const lime = "lime"
-/** Color, to be used without quotation marks during development. */
-const green = "lightgreen"
-/** Color, to be used without quotation marks during development. */
-const gray = "silver"
-//  #endregion Colors
-//#endregion globals and externals
-//#region debug, error and test
-
-/** For debugging purpose.
+/** FotyError
+ * @classdesc Base class for all Errors of [foty]{@link module:foty}
  *
- * Function {@link dbg} only prints out, if {@link DEBUG} is on.<br>
- * dbgYAML output of {@link foty|main function} is only shown, if  {@link DEBUG} is on.
- * @type {Boolean}
- */
-var DEBUG = false
-/** For testing purpose. If on, {@link test}s will run when script is executed.
+ * Gibt formatierte Fehlermeldungen aus.
+ * @description  Creates an Error with a formatted multiline message
  *
- * If set, {@link DEBUG} is off
- * @type {Boolean}
- */
-var TESTING = false
-if (TESTING) DEBUG = false
-/** For checking error output.
+ * Erzeugt aus den ersten 5 Argumenten eine formatierte Fehlermeldung, die
+ * die Eigenschaft 'message' der Basisklasse 'Error' als Wert erhält.
  *
- * If set, all exceptions registered in {@link registeredExceptions}  are triggered and
- * their error output is written to current node.
+ * Weitere Argumente im Rest-Parameter `errorArgs` werden dem
+ * 'Error'-Constructor unverändert übergeben.
  *
- * If set, {@link DEBUG} and {@link TESTING} are off
- * @global
- * @type {Boolean}
+ * @mermaid
+ * ---
+ * config:
+ *   theme: base
+ *   layout: elk
+ *   class:
+ *     hideEmptyMembersBox: true
+ * ---
+ *  classDiagram
+ *      class Error:::extern
+ *      link Error "https://developer.mozilla.org/de/docs/Web/JavaScript/Reference/Global_Objects/Error"
+ *      FotyError <|-- Error
+ *      classDef default fill:#0D5E4E,color:#e6ffe6, stroke:xxx, stroke-width:2px
+ *      classDef extern fill:#bababa
+ * @alias module:foty~FotyError
+ * @augments external:Error
  */
-var CHECK_ERROR_OUTPUT = false
-if (CHECK_ERROR_OUTPUT) {
-  DEBUG = false
-  TESTING = false
-}
-var LOG_ESSENCE_CONSTRUCTOR_2_CONSOLE = false
-
-/** If {@link CHECK_ERROR_OUTPUT|reviewing error output} strings in this array {@link letAllThrow|will be evaluated}
- * @type {Array.<String>}
- */
-const registeredExceptions = []
-/** Calls each function in {@link registeredExceptions} once and puts all
- * Error messages to {@link YAML} properties.
- * @param {Object} YAML
- */
-function letAllThrow(YAML) {
-  let cnt = 0
-  registeredExceptions.forEach((exp) => {
-    try {
-      eval(exp)
-    } catch (e) {
-      if (e instanceof FotyError) e.errOut(YAML, ++cnt)
-      else FotyError.errOut(e, YAML, ++cnt)
-    }
-  })
-}
-
-/** If {@link TESTING|running tests} functions in this array {@link test|will be executed}
- * @type {Array.<Function>}
- */
-var registeredTests = []
-/** Runs all {@link registeredTests|registered tests}, if {@link TESTING} set;
- * test results are written to {@link outputObj} as properties.
- * @param {Object} outputObj
- */
-function test(outputObj) {
-  if (TESTING)
-    registeredTests.forEach((testFunction) => testFunction(outputObj))
-}
-
-/** Returns string with key-value pairs of {@link inp}s properties.
- *
- * Does not recurse in properties of a value.
- * @param {Object} inp
- * @returns {String}
- */
-function flatten(inp) {
-  let res = inp
-  if (typeof inp === "object") {
-    let entries = Object.entries(inp)
-    if (entries.length == 0) {
-      res = "{}"
-    } else {
-      res = ""
-      entries.forEach(([key, value], idx) => {
-        if (typeof value == "symbol")
-          value = "_Symbol_" + GLOBAL_SYMBOL_COUNTER++
-        let indent = idx === 0 ? "OBJ  " : "\n                 "
-        if (typeof value == "object" && value !== null) {
-          Object.values(value).forEach((v) => {
-            if (typeof v == "symbol") value = "Object with Symbol"
-          })
-        }
-        res += `${indent}${key}: ${value}`
-      })
-    }
-  }
-  return res
-}
-
-/** Returns whether {@link arg1} and {@link arg1} are deep equal
- * @param {*} arg1
- * @param {*} arg2
- * @param {Number} lv - recursion depth
- * @returns {Boolean|Undefined}
- */
-function areEqual(arg1, arg2, lv = 0) {
-  function isObject(obj) {
-    return obj != null && typeof obj === "object"
-  }
-  if (!isObject(arg1) || !isObject(arg2)) return arg1 === arg2
-
-  const keys1 = Object.keys(arg1)
-  const keys2 = Object.keys(arg2)
-  if (keys1.length !== keys2.length) {
-    return false
-  }
-  for (const key of keys1) {
-    const val1 = arg1[key]
-    const val2 = arg2[key]
-    const areObjects = isObject(val1) && isObject(val2)
-    if (
-      (areObjects && !areEqual(val1, val2, ++lv)) ||
-      (!areObjects && val1 !== val2)
-    ) {
-      return false
-    }
-  }
-  return true
-}
-
-/** Logs all parameters colored to console, if {@link DEBUG} is set to true.
- *
- * The background of output will be set to 'LightSkyBlue'.
- * @param  {...*} strs
- */
-function dbg(...strs) {
-  function dbgLevel(callStack) {
-    let answer = 0
-    let stack = callStack.split("\n")
-    stack.every((str) => {
-      answer++
-      if (str.includes("at Object.main [")) return false
-      return true
-    })
-    return answer
-  }
-  if (DEBUG) {
-    let output = ""
-    let lvl = dbgLevel(new Error().stack)
-    while (--lvl) output += " "
-    for (const str of strs) {
-      output += str + " "
-    }
-    output = "%c" + output
-    console.log(output, "background: LightSkyBlue")
-  }
-}
-
-/** Logs {@link str}  colored to console.
- * @param {String} str
- * @param {String} b - background color
- * @param {String} c - foreground color
- */
-function aut(str, b = "yellow", c = "red") {
-  let css = `background:${b};color:${c};font-weight:normal`
-  if (typeof str === "object") {
-    let entries = Object.entries(str)
-    if (entries.length === 0) {
-      console.log(`%c${str}`, css)
-    } else {
-      entries.forEach(([key, value], idx, arr) => {
-        let indent = idx === 0 ? "OBJ{" : "    "
-        if (idx + 1 < arr.length)
-          console.log(`%c${indent}${key}: '${value}'`, css)
-        else console.log(`%c${indent}${key}: '${value}'}`, css)
-      })
-    }
-  } else {
-    console.log(`%c${str}`, css)
-  }
-}
-/** Logs all parameters red on yellow to console.
- *
- * colors are not configurable as they are in {@link aut}
- * @param {String} str
- * @param  {...String} strs
- */
-function auts(str, ...strs) {
-  let b = "yellow"
-  let c = "red"
-  let css = `background:${b};color:${c};font-weight:normal`
-  while (strs.length > 0) {
-    str += ` ${strs.shift()}`
-  }
-  console.log(`%c${str}`, css)
-}
-/** logs {@link vn} and {@link v} colored to console.
- * @param {String} vn - variable name
- * @param {String} v - variable value
- * @param {String} b - background color
- * @param {String} c - foreground color
- */
-function vaut(vn, v, b = "yellow", c = "red") {
-  let str = `${vn}: ${v}`
-  if (typeof v === "object") {
-    let entries = Object.entries(v)
-    if (entries.length != 0) {
-      str = `${vn}: `
-      entries.forEach(([key, value], idx) => {
-        let indent = idx === 0 ? "" : "    "
-        str += `${indent}${key}: ${value}`
-      })
-    }
-  }
-  let css = `background:${b};color:${c};font-weight:normal`
-  console.log(`%c${str}`, css)
-}
-
 class FotyError extends Error {
-  static #nl = "\n     "
   /**
-   * Newline for multi line error messages
-   *
-   * As shorthand {@link NL} can be used.<br>
-   * @type {String}
-   */
-  static get nl() {
-    return FotyError.#nl
-  }
-  /**
-   * @description
-   * Set on construction. Will be part of {@link FotyError#errOut|output message}.
-   * @type {String}
-   */
-  #caller = ""
-
-  /**
-   * @classdesc superclass for all foty errors (but not unit test errors).
-   *
-   * Additionally to the parameters for {@link external:Error}
-   * <code>FotyError</code> receives callers name on construction.
-   * @extends external:Error
-   * @constructor
-   * @description Constructs a FotyError instance, with
-   * <code>{@linkcode https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/name|Error.name&#x2348;}</code>
-   * set to "Foty Error".
-   * @param {String} caller - Will be part of {FotyError#errOut|output message}.
-   * @param  {...*} params - Params are given to {@linkcode https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error|superclass&#x2348;}
-   * They consist of
-   * <code>{@linkcode https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/message|Error.message&#x2348;}</code>
-   * and <code>{@linkcode https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/cause|Error.cause&#x2348;}</code>.
-   */
-  constructor(caller, ...params) {
-    super(...params)
-    this.name = "Foty Error"
-    this.#caller = typeof caller === "string" ? caller : ""
-  }
-  /**
-   * Puts error information formatted to {@link YAML} properties.
-   *
-   * If {@link cnt} is a number, {@link YAML} keys will be created using this
-   * number, otherwise fully hardcoded keys will be used.
-   *
-   * The key which's value contains the
-   * <code>{@linkcode https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/message|message&#x2348;}</code>
-   * is returned.
-   *
-   * <b>Usage of cnt</b>
-   * Frontmatter output to current note works with 'key: value'.<br>
-   * In production mode no cnt argument should be given. A short key for e.name
-   * and another for e.message will created. They are added to YAML.
-   * In every call always the same keys are used. This means, that only the last
-   * message is contained in YAML. (In production mode this is supposed to be the
-   * first and only one)
-   *
-   * In some testing cases an every time different cnt argument can be given.
-   * Short keys are created in dependance of cnt and appended to YAML. This means,
-   * that YAML can contain more than one error message. In this case a separator
-   * line is added to YAML under separator key.
-   * @param {Object} YAML
-   * @param {(Undefined|Number)} cnt
-   * @returns {String}
-   */
-  errOut(YAML, cnt) {
-    let prevPad = FotyError.#changePad()
-    let nameKey = this.getNameKey(cnt)
-    let msgKey = FotyError.getMsgKey(cnt)
-    let sepKey = FotyError.getSepKey(cnt)
-    if (sepKey != undefined)
-      YAML[sepKey] = "---------------------------------------------------"
-    YAML[nameKey] = this.name + " in " + this.#caller
-    YAML[msgKey] = this.message.replace(/(?<!(\n[ ]*))[ ][ ]*/g, " ")
-
-    FotyError.#changePad(prevPad)
-    return [msgKey]
-  }
-  /**
-   * Puts error information formatted to {@link YAML} properties.
-   *
-   * This static variant of {@link FotyError#errOut|FotyError.errOut} can be used
-   * for output of non FotyErrors. They will be formatted same way as FotyError instance
-   * errors.
-   *
-   * The key which's value contains the <code>{@linkcode https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/message|message&#x2348;}</code>
-   * of {@link e} is returned.
-   * @param {Error} e
-   * @param {Object} YAML
-   * @param {(undefined|Number)} cnt
-   * @returns {String}
-   */
-  static errOut(e, YAML, cnt) {
-    let prevPad = FotyError.#changePad()
-    let nameKey = FotyError.getNameKey(cnt)
-    let msgKey = FotyError.getMsgKey(cnt)
-    let sepKey = FotyError.getSepKey(cnt)
-    FotyError.#changePad(prevPad)
-
-    if (sepKey != undefined)
-      YAML[sepKey] = "---------------------------------------------------"
-    YAML[nameKey] = e.name
-    YAML[msgKey] = e.message.replace(/(?<!(\n[ ]*))[ ][ ]*/g, " ")
-    return msgKey
-  }
-  /**
-   * Creates and returns key for this instances name in dependence of value of {@link cnt}.
-   *
-   * Can be overridden by subclasses.
-   * @param {(undefined|Number)} cnt
-   * @returns {String}
-   */
-  getNameKey(cnt) {
-    return cnt === undefined || typeof cnt != "number"
-      ? "????"
-      : cnt.pad() + "?"
-  }
-  /**
-   * Creates and returns key for error name in dependence of value of {@link cnt}.
-   * @param {(undefined|Number)} cnt
-   * @returns {String}
-   */
-  static getNameKey(cnt) {
-    return cnt === undefined || typeof cnt != "number"
-      ? "????"
-      : cnt.pad() + "?"
-  }
-  /**
-   * Creates and returns key for error msg in dependence of value of {@link cnt}.
-   * @param {(undefined|Number)} cnt
-   * @returns {String}
-   */
-  static getMsgKey(cnt) {
-    return cnt === undefined || typeof cnt != "number"
-      ? "\u00A8\u00A8\u00A8\u00A8"
-      : cnt.pad() + "\u00A8"
-  }
-  /**
-   * Creates and returns key for separator in dependence of value of {@link cnt}.
-   * @param {(undefined|Number)} cnt
-   * @returns {String}
-   */
-  static getSepKey(cnt) {
-    return cnt === undefined || typeof cnt != "number" ? undefined : cnt.pad()
-  }
-
-  static #changePad(padIn) {
-    let prevPad = Number.prototype.pad
-    function pad(size = 3) {
-      var s = String(this)
-      while (s.length < size) s = "0" + s
-      return s
-    }
-    Number.prototype.pad = padIn === undefined ? pad : padIn
-    return prevPad
-  }
-}
-/** shorthand for {@link FotyError#nl|FotyError.nl} */
-const NL = FotyError.nl
-
-class SettingError extends FotyError {
-  usrMsg = ""
-  /**
-   * @classdesc User error thrown from setting tree.
-   *
-   * Some of the errors from setting tree for sure can only occur if entries in
-   * setting input are wrong. Those are user errors. Using the 2nd parameter
-   * a user specific message can be given.
-   * @extends FotyError
-   * @constructor
-   * @description
-   * Constructs a SettingError instance,
-   * <code>{@linkcode https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/name|Error.name&#x2348;}</code>
-   * set to "Setting Error"
-   * @param {String} caller
-   * @param {String} usrMsg
-   * @param  {...*} params
-   */
-  constructor(caller, usrMsg, ...params) {
-    super(caller, ...params)
-    this.name = "Setting Error"
-    this.usrMsg = usrMsg === undefined ? "" : usrMsg
-  }
-  /**
-   * Appends user message if given to output object.
-   * @param {Object} YAML
-   * @param {Undefined|Number} cnt
-   */
-  errOut(YAML, cnt) {
-    cnt = cnt === undefined ? 0 : cnt
-    let msgKey = super.errOut(YAML, cnt)
-    if (this.usrMsg.length > 0)
-      YAML[msgKey] += NL + this.usrMsg.replace(/(?<!(\n[ ]*))[ ][ ]*/g, " ")
-  }
-  /**
-   * Returns subclass specific name.
-   * @param {Undefined|Number} cnt
-   * @returns {String}
-   */
-  getNameKey(cnt) {
-    return cnt === undefined ? "_ERR" : cnt.pad(4)
-  }
-}
-
-class CodingError extends FotyError {
-  /** @classdesc Programming error.
-   *
-   * Some errors only can occur if code is wrong. If this is for sure,
-   * CodingError should be thrown.
-   * @extends FotyError
-   * @constructor
-   * @description
-   * Constructs a CodingError instance,
-   * <code>{@linkcode https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/name|Error.name&#x2348;}</code>
-   * set to "Coding Error"
-   *
-   * @param {String} caller
-   * @param  {...*} params
-   */
-  constructor(caller, ...params) {
-    super(caller, ...params)
-    this.name = "Coding Error"
-  }
-  /** Returns subclass specific name.
-   * @param {Undefined|Number} cnt
-   * @returns {String}
-   */
-  getNameKey(cnt) {
-    return cnt === undefined ? "!!!!" : cnt.pad(4) + "!"
-  }
-}
-
-class TestSuite {
-  //#region member variables
-  //static ok = "\u2713"
-  //static nok = "\u2718"
-  static ok = "✅"
-  static nok = "❌"
-
-  static #totalSuites = 0
-  static #totalTests = 0
-  static #totalCases = 0
-  #name
-  #outputObj = undefined
-  #succeeded = 0
-  #failed = 0
-  #fname = ""
-  #asserts = 0
-  #cases = 0
-  o = this.#outputObj
-  f = "failing"
-  s = "success"
-  d = "details"
-  e = "none"
-  z = "summary"
-  get name() {
-    return this.#name
-  }
-  //#endregion member variables
-
-  /** Sets up the suite
-   * @param {String} name - name of the suite
-   * @param {Object} outputObj - javascript object for output in Obsidian
-   */
-  constructor(name, outputObj) {
-    TestSuite.#totalSuites++
-    this.#name = name ? name : "Unknown"
-    this.o = outputObj
-    if (this.o[this.z] === undefined) this.o[this.z] = this.e
-    if (this.o[this.f] === undefined) this.o[this.f] = this.e
-    if (this.o[this.s] === undefined) this.o[this.s] = this.e
-    if (this.o[this.d] === undefined) this.o[this.d] = this.e
-  }
-  toString() {
-    return " °°" + this.constructor.name + " " + this.name
-  }
-
-  /** Shows results resets
-   */
-  destruct() {
-    let suc_Str = this.#succeeded === 1 ? "test" : "tests"
-    let failStr = this.#failed === 1 ? "test" : "tests"
-    if (this.#failed === 0) {
-      this.#praut(
-        this.s,
-        `Suite "${this.#name}":${this.#succeeded} ${suc_Str} succeeded`
-      )
-    } else {
-      this.#praut(
-        this.f,
-        `Suite "${this.#name}":${this.#failed} ${failStr} failed, ${
-          this.#succeeded
-        } succeeded`
-      )
-    }
-    this.#name = null
-    this.o = null
-    this.#succeeded = 0
-    this.#failed = 0
-    this.#fname = ""
-    this.#asserts = 0
-    this.#cases = 0
-  }
-
-  /** runs test
-   * @param {Function} fn
-   */
-  run(fn) {
-    TestSuite.#totalTests++
-    this.#fname = fn.name
-    this.#asserts = 0
-    try {
-      fn()
-      let cases = this.#cases === 1 ? "case" : "cases"
-      if (0 === this.#asserts) {
-        this.#succeeded++
-        this.#praut(
-          this.d,
-          `${this.#name}:${this.#fname}(${this.#cases} ${cases}) ${
-            TestSuite.ok
-          }`
-        )
-      } else {
-        this.#failed++
-        this.#praut(
-          this.d,
-          `${TestSuite.nok}${this.#name}:${this.#fname}(${
-            this.#cases
-          } ${cases}) ${TestSuite.nok}`
-        )
-      }
-    } catch (e) {
-      console.error(
-        "ERROR in TestSuite:run\n" +
-          "You probably caused an error in one of your tests which is not test specific\n" +
-          e
-      )
-    }
-    this.#fname = ""
-    this.#cases = 0
-  }
-
-  /** runs test containing promised functions
-   * @param {Function} fn
+   * @param {?number} nameLen - intendentation for 2nd and following lines
+   * @param {?Object} callingEnv - Object out of which this Errof is thrown
+   * @param {?string} callingEnv._$_protoName - identifier for throwing environment
+   * @param {?function} caller - function, which throws the error
+   * @param {?string} callerArgs - Arguments for 'caller'
+   * @param {?(string|Array.<string>)} message - specific error message
+   * @param {...*} errorArgs - further arguments for Error Constructor
    * @example
-   * let _ = null
-   * function testIt() {
-   *   _ = new TestSuite("testIt", null)
-   *   _.prun(first_Test)
-   *   .then ( (asw) => {return _.prun(second_Test)} )
-   *   .then ( (asw) => {return _.prun(third_Test)} )
-   *   .then ( (asw) => {_.destruct() _ = null } )
-   *   .catch(( asw) => log("CATCH " + asw) )
-   * }
-   * function first_Test() {//second_Test, third_Test
-   *   let p = new Promise((resolve, reject) => {
-   *     let fuName = "first_Test" //"second_Test", "third_Test"
-   *     let result = asynchronousFunction(fuName).then( () => {
-   *       _.assert( 1, _check, result)
-   *       _.assert( 2, _check, result)
-   *       // destruct result (In use case it might be instance)
-   *       resolve("IN" + fuName + ": Result " + result + " destructed")
-   *     })
-   *   })
-   *   return p
-   * }
-   * function _check(result) {
-   *   if(typeof result !== "string")
-   *     throw new TestError(`${result} should be a string`)
-   * }
+   * // Ohne Argumente
+   * new FotyError()
+   * // FotyError:
+   * //    Beim Aufruf aus undefined.undefined()
+   * @example
+   * // Fehlermeldung als String
+   * new FotyError(7, null, null, null, 'line')
+   * // FotyError: line
+   * //    Beim Aufruf aus null.null()
+   * @example
+   * // Fehlermeldung als Array
+   * new FotyError(9, null, null, null, ['line1', 'line2'])
+   * // FotyError: line1
+   * //            line2
+   * //    Beim Aufruf aus null.null()
+   * @example
+   * // Alle Parameter nach dem 5. gehen unverändert an den Error Constructor
+   * new FotyError(9, null, null, null, ['line1', 'line2'],
+   * {
+   *   cause: { code: "NonInteger", values: [2, 'hh'] },
+   * })
+   * // FotyError: line1
+   * //            line2
+   * //    Beim Aufruf aus null.null()
+   * @example
+   * // Fünf Argumente gesetzt, iThrow ist Funktion, env = { _$_protoName: 'THROWING_ENV' }
+   * new FotyError(9, env, iThrow, 'arg1, arg2, -203', ['line1', 'line2'])
+   * // FotyError: line1
+   * //            line2
+   * //    Beim Aufruf aus THROWING_ENV.iThrow(arg1, arg2, -203)
    */
-  prun(fn) {
-    TestSuite.#totalTests++
-    return new Promise((resolve, reject) => {
-      this.#fname = fn.name
-      this.#asserts = 0
-      try {
-        fn().then((fnAnswer) => {
-          let cases = this.#cases === 1 ? "case" : "cases"
-          if (0 === this.#asserts) {
-            this.#succeeded++
-            this.#praut(
-              this.d,
-              `${this.#name}:${this.#fname}(${this.#cases} ${cases}) ${
-                TestSuite.ok
-              }`
-            )
-          } else {
-            this.#failed++
-            this.#praut(
-              this.d,
-              `${TestSuite.nok}${this.#name}:${this.#fname}(${
-                this.#cases
-              } ${cases}) ${TestSuite.nok}`
-            )
-          }
-          this.#fname = ""
-          this.#cases = 0
-          resolve(fn.name + " resolved")
-        })
-      } catch (e) {
-        console.error(e)
-        this.#fname = ""
-        this.#cases = 0
-        resolve(fn.name + " catch")
+  constructor (nameLen, callingEnv, caller, callerArgs, ...errorArgs) {
+    if (errorArgs && Array.isArray(errorArgs[0])) {
+      let errorStr = errorArgs[0][0]
+      const spaces = ' '.repeat(nameLen + 2)
+      for (let i = 1; i < errorArgs[0].length; i++) {
+        errorStr += '\n'
+        errorStr += spaces
+        errorStr += errorArgs[0][i]
       }
-    })
-  }
-
-  /** asserts boolean one case in a test, shows message on failure
-   * @param {Number} errCase
-   * @param {Boolean} isTrue
-   * @param {String} message
-   */
-  bassert(errCase, isTrue, message) {
-    TestSuite.#totalCases++
-    this.#cases++
-    if (!isTrue) {
-      this.#asserts++
-      console.log(
-        `%c   ${this.#name}/${this.#fname}:case ${errCase} - ${message}`,
-        "background: rgba(255, 99, 71, 0.5)"
-      )
+      errorArgs[0] = errorStr
     }
-  }
-
-  /** asserts catching exceptions one case in a test, shows message on failure
-   * @param {Number} errCase
-   * @param {Function} fn
-   * @param {...*} params
-   */
-  assert(errCase, fn, ...params) {
-    TestSuite.#totalCases++
-    this.#cases++
-    try {
-      fn(...params)
-    } catch (err) {
-      this.#asserts++
-      console.log(
-        `%c   ${this.#name}/${this.#fname}:case ${errCase} - ${err.message}`,
-        "background: rgba(255, 99, 71, 0.5)"
-      )
-    }
-  }
-
-  /** silents exception of one test case, asserts & shows message if no exception
-   * @param {Number} errCase
-   * @param {Function} fn
-   * @param {...*} ...params
-   */
-  shouldAssert(errCase, fn, ...params) {
-    TestSuite.#totalCases++
-    this.#cases++
-    let hasAsserted = false
-    let message = params.pop()
-    try {
-      fn(...params)
-    } catch (err) {
-      hasAsserted = true
-    }
-    if (!hasAsserted) {
-      this.#asserts++
-      console.log(
-        `%c   ${this.#name}/${
-          this.#fname
-        }:case ${errCase} should assert - ${message}`,
-        "background: rgba(255, 99, 71, 0.5)"
-      )
-    }
-  }
-
-  /** output to current note (indirect) and for failures on console
-   * @param {String} str
-   */
-  #praut(key, str) {
-    /* o = this.#outputObj
-     * f = "failing"
-     * s = "success"
-     * d = "details"
-     * e = "none"
-     * z = "summary" */
-    let nl_indent = "\n\n        "
-    if (key != this.s && key != this.f && key != this.d) {
-      let errStr = "%c" + key
-      console.log(errStr, "background: rgba(255, 99, 71, 0.5)")
-    } else if (this.o[key] === this.e) {
-      this.o[key] = str
-    } else if (str[0] === TestSuite.nok) {
-      if (key === this.d) {
-        //"details"
-        let outParts = this.o[key].split(TestSuite.nok)
-        let len = outParts.length
-        let okPart = outParts[len - 1]
-        if (len === 1) {
-          let newLastPart = str.substring(1) + nl_indent + okPart
-          outParts[outParts.length - 1] = newLastPart
-          this.o[key] = outParts.join()
-        } else {
-          let newLastPart = nl_indent + str.substring(1) + okPart
-          outParts[outParts.length - 1] = newLastPart
-          this.o[key] = outParts.join(TestSuite.nok)
-        }
-      } else {
-        //"failing"
-        this.o[key] = str.substring(1) + nl_indent + this.o[key]
-      }
-    } else {
-      // "details" or "success"
-      this.o[key] = this.o[key] + nl_indent + str
-    }
-    // No Space after colon, otherwise YAMLParserError
-    // prettier-ignore
-    this.o[this.z] = `Suites:${TestSuite.#totalSuites} | Tests:${TestSuite.#totalTests} | Cases:${TestSuite.#totalCases}`
-  }
-}
-/**
- * @classdesc Error used for unit tests.
- * @extends external:Error
- */
-class TestError extends Error {
-  constructor(message, ...params) {
-    super(message, ...params)
-    this.name = "TestError"
-  }
-  toString() {
-    return " °°" + this.constructor.name + " " + this.name
-  }
-}
-
-//prettier-ignore
-function testGlobals(outputObj) {
-  let _ = null
-  if(_ = new TestSuite("Globals", outputObj)) {
-    _.run(flattenTest)
-    _.run(areEqualTest)
-    _.destruct()
-    _ = null
-  }
-  function flattenTest() {
-    let obj0 = {}
-    let flat0 = flatten(obj0)
-    let exp0 = "{}"
-    _.bassert(1,flat0 == exp0, "empty object should be same as toString output")
-  }
-  function areEqualTest() {
-    let un
-    let obj1 = {}
-    let obj1_0 = {}
-    let obj1_1 = {un}
-    let obj1_2 = {a:true}
-    _.assert(1,_tryAreEqual,22,obj1,"any arguments allowed")
-    _.assert(2,_tryAreEqual,obj1, "a","any arguments allowed")
-    _.bassert(3,areEqual(obj1, obj1_0),"objs are equal - see code")
-    _.bassert(4,!areEqual(obj1, obj1_1),"objs are not equal - see code")
-    _.bassert(5,!areEqual(obj1, obj1_2),"objs are not equal - see code")
-    let obj2 = {a:{b:{c:true,d:"alpha",e:22,f:22n,g:null,h:undefined,i:cbkTypeOf}}}
-    let obj2_0 = {"a":{"b":{"c":true,"d":"alpha","e":22,"f":22n,"g":null,"h":undefined,"i":cbkTypeOf}}}
-    let obj2_1 = {a:{b:{c:true,d:"alpha",e:22,f:22n,g:null,h:undefined,i:cbkTypeOf,j:22}}}
-    let obj2_2 = {a:{b:{c:true,d:"alpha",e:22,f:22n,g:null,h:undefined}}}
-    let obj2_3 = {a:{b:{c:false,d:"alpha",e:22,f:22n,g:null,h:undefined,i:cbkTypeOf}}}
-    let obj2_4 = {a:{b:{c:true,d:"Alpha",e:22,f:22n,g:null,h:undefined,i:cbkTypeOf}}}
-    let obj2_5 = {a:{b:{c:true,d:"alpha",e:23,f:22n,g:null,h:undefined,i:cbkTypeOf}}}
-    let obj2_6 = {a:{b:{c:true,d:"alpha",e:22,f:22,g:null,h:undefined,i:cbkTypeOf}}}
-    let obj2_7 = {a:{b:{c:true,d:"alpha",e:22,f:22n,g:undefined,h:undefined,i:cbkTypeOf}}}
-    let obj2_8 = {a:{b:{c:true,d:"alpha",e:22,f:22n,g:null,h:null,i:cbkTypeOf}}}
-    let obj2_9 = {a:{b:{c:true,d:"alpha",e:22,f:22n,g:null,h:undefined,i:_tryAreEqual}}}
-    let obj2_10 = {A:{b:{c:true,d:"alpha",e:22,f:22n,g:null,h:undefined,i:cbkTypeOf}}}
-    _.bassert(10,areEqual(obj2, obj2_0),"objs are equal - see code")
-    _.bassert(11,!areEqual(obj2, obj2_1),"objs are not equal - see code")
-    _.bassert(12,!areEqual(obj2, obj2_2),"objs are not equal - see code")
-    _.bassert(13,!areEqual(obj2, obj2_3),"objs are not equal - see code")
-    _.bassert(14,!areEqual(obj2, obj2_4),"objs are not equal - see code")
-    _.bassert(15,!areEqual(obj2, obj2_5),"objs are not equal - see code")
-    _.bassert(16,!areEqual(obj2, obj2_6),"objs are not equal - see code")
-    _.bassert(17,!areEqual(obj2, obj2_7),"objs are not equal - see code")
-    _.bassert(18,!areEqual(obj2, obj2_8),"objs are not equal - see code")
-    _.bassert(19,!areEqual(obj2, obj2_9),"objs are not equal - see code")
-    _.bassert(20,!areEqual(obj2, obj2_10),"objs are not equal - see code")
-    let obj3 = {a:[1]}
-    let obj3_0 = {a:[1]}
-    let obj3_1 = {a:1}
-    let obj3_2 = {a:{}}
-    let obj3_3 = {a:[2]}
-    let obj3_4 = {a:[1,2]}
-    _.bassert(30,areEqual(obj3, obj3_0),"objs are equal - see code")
-    _.bassert(31,!areEqual(obj3, obj3_1),"objs are not equal - see code")
-    _.bassert(32,!areEqual(obj3, obj3_2),"objs are not equal - see code")
-    _.bassert(33,!areEqual(obj3, obj3_3),"objs are not equal - see code")
-    _.bassert(34,!areEqual(obj3, obj3_4),"objs are not equal - see code")
-
-    let arr1 = []
-    let arr1_0 = []
-    let arr1_1 = [1]
-    _.bassert(101,areEqual(arr1, arr1_0),"arrays are equal - see code")
-    _.bassert(102,!areEqual(arr1, arr1_1),"arrays are not equal - see code")
-    let arr2 = [undefined, null, true, 1, 1n, "string",cbkTypeOf,{}]
-    let arr2_0 = [undefined, null, true, 1, 1n, "string",cbkTypeOf,{}]
-    let arr2_1 = [null, null, true, 1, 1n, "string",cbkTypeOf,{}]
-    let arr2_2 = [undefined, undefined, true, 1, 1n, "string",cbkTypeOf,{}]
-    let arr2_3 = [undefined, null, false, 1, 1n, "string",cbkTypeOf,{}]
-    let arr2_4 = [undefined, null, true, 2, 1n, "string",cbkTypeOf,{}]
-    let arr2_5 = [undefined, null, true, 1, 1, "string",cbkTypeOf,{}]
-    let arr2_6 = [undefined, null, true, 1, 1n, "String",cbkTypeOf,{}]
-    let arr2_7 = [undefined, null, true, 1, 1n, "string",_tryAreEqual,{}]
-    let arr2_8 = [undefined, null, true, 1, 1n, "string",_tryAreEqual,{a:1}]
-    _.bassert(111,areEqual(arr2, arr2_0),"arrays are equal - see code")
-    _.bassert(112,!areEqual(arr2, arr2_1),"arrays are not equal - see code")
-    _.bassert(113,!areEqual(arr2, arr2_2),"arrays are not equal - see code")
-    _.bassert(114,!areEqual(arr2, arr2_3),"arrays are not equal - see code")
-    _.bassert(115,!areEqual(arr2, arr2_4),"arrays are not equal - see code")
-    _.bassert(116,!areEqual(arr2, arr2_5),"arrays are not equal - see code")
-    _.bassert(117,!areEqual(arr2, arr2_6),"arrays are not equal - see code")
-    _.bassert(118,!areEqual(arr2, arr2_7),"arrays are not equal - see code")
-    _.bassert(119,!areEqual(arr2, arr2_8),"arrays are not equal - see code")
-    let arr3 = [[[1,2,3]]]
-    let arr3_0 = [[[1,2,3]]]
-    let arr3_1 = [[[1,2]]]
-    let arr3_2 = [[[1,2,3,4]]]
-    _.bassert(131,areEqual(arr3, arr3_0),"arrays are equal - see code")
-    _.bassert(132,!areEqual(arr3, arr3_1),"arrays are not equal - see code")
-    _.bassert(133,!areEqual(arr3, arr3_2),"arrays are not equal - see code")
-
-    _.bassert(141,areEqual(un, undefined),"undefined is equal undefined")
-    _.bassert(142,!areEqual(un, arr3),"undefined not equal array")
-    _.bassert(143,!areEqual(arr3,un),"undefined not equal array")
-    _.bassert(144,!areEqual(un, obj3),"undefined not equal object")
-    _.bassert(145,!areEqual(obj3,un),"undefined not equal object")
-    _.bassert(146,!areEqual(un, null),"undefined not equal null")
-    _.bassert(147,!areEqual(null, un),"undefined not equal null")
-
-    _.bassert(151,areEqual(1,1),"1 is equal 1")
-    _.bassert(152,areEqual(true,true),"true is equal true")
-    _.bassert(153,areEqual(false,false),"false is equal false")
-    _.bassert(154,areEqual(22n,22n),"22n is equal 22n")
-    _.bassert(155,areEqual("str str","str str"),"'str str' is equal 'str str'")
-    _.bassert(156,!areEqual(1,2),"1 is not equal 2")
-    _.bassert(157,!areEqual(true,false),"true is not equal false")
-    _.bassert(158,!areEqual(false,null),"false is not equal null")
-    _.bassert(159,!areEqual(22n,22),"22n is not equal 22")
-    _.bassert(160,!areEqual("str str","str str2"),"'str str' is not equal 'str str2'")
-  }
-function _tryAreEqual(arg1, arg2) {
-    areEqual(arg1, arg2)
-  }
-}
-registeredTests.push(testGlobals)
-
-//#endregion debug, error and test
-//#region helper classes
-
-/** Events that Dispatcher stores and distribute to listeners.
- *
- */
-class Event {
-  //#region member variables
-  name
-  callbacks
-  //#endregion member variables
-
-  constructor(name) {
+    const name = 'FotyError'
+    super(...errorArgs)
     this.name = name
-    this.callbacks = []
+    this.message += '\n   Beim Aufruf aus '
+    this.message += callingEnv ? callingEnv._$_protoName ?? 'UNBEKANNT' : callingEnv
+    this.message += '.'
+    this.message += caller ? caller.name ?? 'UNBEKANNT' : caller
+    this.message += '(' + (callerArgs ?? '') + ')'
   }
-  toString() {
-    return " °°" + this.constructor.name + " " + this.name
-  }
-  registerCallback(callback, instance) {
-    this.callbacks.push([callback, instance])
-  }
-  //#region Event tests
-  static _ = null
-  static test(outputObj) {
-    // Event
-    Event._ = new TestSuite("Event", outputObj)
-    Event._.run(Event.constructorTest)
-    Event._.run(Event.toStringTest)
-    Event._.run(Event.registerCallbackTest)
-    Event._.destruct()
-    Event._ = null
-  }
-  static constructorTest() {
-    Event._.assert(1, Event._tryConstruct, undefined)
-    Event._.assert(2, Event._tryConstruct, "eventname")
-    let event = new Event()
-    Event._.bassert(
-      3,
-      event.constructor === Event,
-      "the constructor property is not Event"
-    )
-  }
-  static toStringTest() {
-    let str = new Event("eventname").toString()
-    Event._.bassert(1, str.includes("eventname"), "does not contain Event name")
-  }
-  static registerCallbackTest() {
-    let e = new Error()
-    Event._.assert(1, Event._tryRegisterCallback, undefined, undefined)
-    Event._.assert(2, Event._tryRegisterCallback, "eventname", undefined)
-    Event._.assert(3, Event._tryRegisterCallback, "eventname", e)
-  }
-  static _tryConstruct(arg1) {
-    new Event(arg1)
-  }
-  static _tryRegisterCallback(arg1, arg2) {
-    let e = new Event("eventname")
-    e.registerCallback(arg1, arg2)
-  }
-  //#endregion Event tests
 }
-registeredTests.push(Event.test)
-/** Event worker.
+
+/** LiteralError
+ * @classdesc
+ * Error thrown on wrong configuration literal.
  *
+ * Dieser Fehler wird ausgelöst, falls das Literal nicht als configuration
+ * gelesen werden kann.
+ *
+ * @description Creates an error thrown on wrong literal.
+ *
+ * Erzeugt einen LiteralError
+ *
+ * @mermaid
+ * ---
+ * config:
+ *   theme: base
+ *   layout: elk
+ *   class:
+ *     hideEmptyMembersBox: true
+ * ---
+ *  classDiagram
+ *      class Error:::extern
+ *      class FotyError
+ *      link Error "https://developer.mozilla.org/de/docs/Web/JavaScript/Reference/Global_Objects/Error"
+ *      link FotyError "{@link module-foty.FotyError.html}"
+ *      FotyError <|-- Error
+ *      LiteralError <|-- FotyError
+ *      classDef default fill:#0D5E4E,color:#e6ffe6, stroke:xxx, stroke-width:2px
+ *      classDef extern fill:#bababa
+ * @alias module:foty~LiteralError
+ * @augments module:foty~FotyError
  */
-class Dispatcher {
-  //#region member variables
-  events
-  //#endregion member variables
-  constructor() {
-    this.events = {}
+class LiteralError extends FotyError {
+  /**
+   * @param {?Object} callingEnv - Object out of which this Errof is thrown
+   * @param {?string} callingEnv._$_protoName - identifier for throwing environment
+   * @param {?function} caller - function, which throws the error
+   * @param {?string} callerArgs - Arguments for 'caller'
+   * @param {?(string|Array.<string>)} message - specific error message
+   * @param {...*} errorArgs - further Arguments for Error Constructor
+   * @example
+   * // Ohne Argumente
+   * new LiteralError()
+   * // LiteralError:
+   * //    Beim Aufruf aus null.undefined()
+   * @example
+   * // Fehlermeldung als String
+   * new LiteralError(null, null, null, 'Aline')
+   * // LiteralError: Aline
+   * //    Beim Aufruf aus null.null()
+   * @example
+   * // Fehlermeldung als Array
+   * new LiteralError(null, null, null, ['lineA', 'lineB'])
+   * // LiteralError: lineA
+   * //               lineB
+   * //    Beim Aufruf aus null.null()
+   * @example
+   * // Alle Parameter nach dem 4. gehen unverändert an den Error Constructor
+   * new LiteralError(null, null, null, ['lineA', 'lineB'],
+   * {
+   *   cause: { code: "NonInteger", values: [2, 'hh'] },
+   * })
+   * // LiteralError: lineA
+   * //               lineB
+   * //    Beim Aufruf aus null.null()
+   * @example
+   * // Vier Argumente gesetzt, iThrow ist Funktion, env = { _$_protoName: 'THROWING_ENV' }
+   * new LiteralError(env, iThrow, 'arg1, arg2, -203', ['lineA', 'lineB'])
+   * // LiteralError: lineA
+   * //               lineB
+   * //    Beim Aufruf aus THROWING_ENV.iThrow(arg1, arg2, -203)
+   */
+  constructor (callingEnv, caller, callerArgs, ...errorArgs) {
+    const name = 'LiteralError'
+    super(name.length, callingEnv, caller, callerArgs, ...errorArgs)
+    this.name = name
   }
-  toString() {
-    return " °°" + this.constructor.name
+}
+
+/** InitializationError
+ * @classdesc
+ * Error thrown if calling noninitialized configuration or section
+ *
+ * Dieser Fehler wird ausgelöst, falls eine Funktion einer configuration oder
+ * einer section aufgerufen wird, bevor diese initialisiert wurde.
+ *
+ * @description Creates an error thrown if object is accessed without being initialized.
+ *
+ * Erzeugt einen InitializationError
+ *
+ * @mermaid
+ * ---
+ * config:
+ *   theme: base
+ *   layout: elk
+ *   class:
+ *     hideEmptyMembersBox: true
+ * ---
+ *  classDiagram
+ *      class Error:::extern
+ *      class FotyError
+ *      link Error "https://developer.mozilla.org/de/docs/Web/JavaScript/Reference/Global_Objects/Error"
+ *      link FotyError "{@link module-foty.FotyError.html}"
+ *      FotyError <|-- Error
+ *      InitializationError <|-- FotyError
+ *      classDef default fill:#0D5E4E,color:#e6ffe6, stroke:xxx, stroke-width:2px
+ *      classDef extern fill:#bababa
+ * @alias module:foty~InitializationError
+ * @augments module:foty~FotyError
+ */
+class InitializationError extends FotyError {
+  /**
+   * @param {?Object} callingEnv - Object out of which this Errof is thrown
+   * @param {?string} callingEnv._$_protoName - identifier for throwing environment
+   * @param {?function} caller - function, which throws the error
+   * @param {?string} callerArgs - Arguments for 'caller'
+   * @param {?(string|Array.<string>)} message - specific error message
+   * @param {...*} errorArgs - further Arguments for Error Constructor
+   * @example
+   * // Ohne Argumente
+   * new InitializationError()
+   * // InitializationError:
+   * //    Beim Aufruf aus null.undefined()
+   * @example
+   * // Fehlermeldung als String
+   * new InitializationError(null, null, null, 'Aline')
+   * // InitializationError: Aline
+   * //    Beim Aufruf aus null.null()
+   * @example
+   * // Fehlermeldung als Array
+   * new InitializationError(null, null, null, ['lineA', 'lineB'])
+   * // InitializationError: lineA
+   * //                      lineB
+   * //    Beim Aufruf aus null.null()
+   * @example
+   * // Alle Parameter nach dem 4. gehen unverändert an den Error Constructor
+   * new InitializationError(null, null, null, ['lineA', 'lineB'],
+   * {
+   *   cause: { code: "NonInteger", values: [2, 'hh'] },
+   * })
+   * // InitializationError: lineA
+   * //                      lineB
+   * //    Beim Aufruf aus null.null()
+   * @example
+   * // Vier Argumente gesetzt, iThrow ist Funktion, env = { _$_protoName: 'THROWING_ENV' }
+   * new InitializationError(env, iThrow, 'arg1, arg2, -203', ['lineA', 'lineB'])
+   * // InitializationError: lineA
+   * //                      lineB
+   * //    Beim Aufruf aus THROWING_ENV.iThrow(arg1, arg2, -203)
+   */
+  constructor (callingEnv, caller, callerArgs, ...errorArgs) {
+    const name = 'InitializationError'
+    super(name.length, callingEnv, caller, callerArgs, ...errorArgs)
+    this.name = name
   }
-  registerEvent(eventName) {
-    var event = new Event(eventName)
-    this.events[eventName] = event
+}
+
+/** AccessError
+ * @classdesc
+ * Error thrown when acessing configuration or section with wrong arguments.
+ *
+ * Dieser Fehler wird ausgelöst, falls eine Funktion einer configuration oder
+ * einer section mit Argumenten aufgerufen wird, die dafür nicht geeignet sind.
+ *
+ * @description Creates an error thrown when arguments are wrong.
+ *
+ * Erzeugt einen AccessError
+ *
+ * @mermaid
+ * ---
+ * config:
+ *   theme: base
+ *   layout: elk
+ *   class:
+ *     hideEmptyMembersBox: true
+ * ---
+ *  classDiagram
+ *      class Error:::extern
+ *      class FotyError
+ *      link Error "https://developer.mozilla.org/de/docs/Web/JavaScript/Reference/Global_Objects/Error"
+ *      link FotyError "{@link module-foty.FotyError.html}"
+ *      FotyError <|-- Error
+ *      AccessError <|-- FotyError
+ *      classDef default fill:#0D5E4E,color:#e6ffe6, stroke:xxx, stroke-width:2px
+ *      classDef extern fill:#bababa
+ * @alias module:foty~AccessError
+ * @augments module:foty~FotyError
+ */
+class AccessError extends FotyError {
+  /**
+   * @param {?Object} callingEnv - Object out of which this Errof is thrown
+   * @param {?string} callingEnv._$_protoName - identifier for throwing environment
+   * @param {?function} caller - function, which throws the error
+   * @param {?string} callerArgs - Arguments for 'caller'
+   * @param {?(string|Array.<string>)} message - specific error message
+   * @param {...*} errorArgs - further Arguments for Error Constructor
+   * @example
+   * // Ohne Argumente
+   * new AccessError()
+   * // AccessError:
+   * //    Beim Aufruf aus null.undefined()
+   * @example
+   * // Fehlermeldung als String
+   * new AccessError(null, null, null, 'Aline')
+   * // AccessError: Aline
+   * //    Beim Aufruf aus null.null()
+   * @example
+   * // Fehlermeldung als Array
+   * new AccessError(null, null, null, ['lineA', 'lineB'])
+   * // AccessError: lineA
+   * //              lineB
+   * //    Beim Aufruf aus null.null()
+   * @example
+   * // Alle Parameter nach dem 4. gehen unverändert an den Error Constructor
+   * new AccessError(null, null, null, ['lineA', 'lineB'],
+   * {
+   *   cause: { code: "NonInteger", values: [2, 'hh'] },
+   * })
+   * // AccessError: lineA
+   * //              lineB
+   * //    Beim Aufruf aus null.null()
+   * @example
+   * // Vier Argumente gesetzt, iThrow ist Funktion, env = { _$_protoName: 'THROWING_ENV' }
+   * new AccessError(env, iThrow, 'arg1, arg2, -203', ['lineA', 'lineB'])
+   * // AccessError: lineA
+   * //              lineB
+   * //    Beim Aufruf aus THROWING_ENV.iThrow(arg1, arg2, -203)
+   */
+  constructor (callingEnv, caller, callerArgs, ...errorArgs) {
+    const name = 'AccessError'
+    super(name.length, callingEnv, caller, callerArgs, ...errorArgs)
+    this.name = name
   }
-  addListener(eventName, callback, instance) {
-    this.events[eventName].registerCallback(callback, instance)
-  }
-  dispatchEvent(eventName, eventArgs) {
-    this.events[eventName].callbacks.forEach((arr) => {
-      let callback = arr[0]
-      let instance = arr[1]
-      callback(instance, eventArgs)
+}
+
+/** configuration
+ * @description
+ * This is a description of the configuration class constructor function.
+ *
+ * Wegen @hideconstructor wird kein Constructor dokumentiert.
+ * @class
+ * @hideconstructor
+ *
+ * @classdesc full foty configuration object
+ *
+ * Diese Klasse enthält die gesamte foty Konfiguration, alle vier Sektionen.
+ *
+ * Es gibt keinen Constructor, und doch ist das Ganze eine Klasse. Die Objekte
+ * werden nicht mit new erzeugt. Die Instanzen werden über Literale beim Lesen
+ * des Javascript Scripts erzeugt. Mittels des Prototypsetters '__proto__' wird
+ * dem aus einem Literal neu erzeugten Objekt die Klasse zugewiesen. So ist es
+ * tatsächlich eine zur Laufzeit erzeugte Instanz dieser Klasse. Es kann mehrere
+ * Instanzen geben.
+ *
+ * Ich könnte einen Konstruktor schreiben, der ein Literal als Argument bekommt
+ * - was ja dann schon ein Objekt ist, wenn er es verarbeitet. DeepCopy? Vielleicht
+ * später. Im Moment brauche ich keinen Konstruktor. Wenn eine andere Art der
+ * Konfigurationserstellung da ist, z.B. wenn poty fertig ist und verwendet wird,
+ * dann brauche ich tatsächlich einen Konstruktor.
+ *
+ * Im Prinzip läuft das umgekehrt wie ein Konstruktor - es gibt ein Objekt und
+ * dem wird die Klasse reingehängt. Bei einem klassischen Konstruktor würde die
+ * Klasse ein Objekt erzeugen.
+ *
+ * @mermaid
+ * ---
+ * config:
+ *   theme: base
+ *   layout: elk
+ *   class:
+ *     hideEmptyMembersBox: true
+ * ---
+ *  classDiagram
+ *      class Object:::extern
+ *      class configuration
+ *      link Object "https://developer.mozilla.org/de/docs/Web/JavaScript/Reference/Global_Objects/"
+ *      configuration <|--Object
+ *      classDef default fill:#0D5E4E,color:#e6ffe6, stroke:xxx, stroke-width:2px
+ *      classDef extern fill:#bababa
+ * @alias module:foty~configuration
+ * @augments external:Object
+ */
+const configuration =
+/** @lends module:foty~configuration.prototype */
+{
+  _$_protoName: 'configuration',
+  knownSections: [
+    'SECTION_GENERAL',
+    'SECTION_TRANSLATE',
+    'SECTION_DIALOG',
+    'SECTION_NOTETYPES',
+  ],
+  _$_instance: false,
+
+  /** configuration.throwIfNotUsable: Throws error if proto is not usable.
+   *
+   * Jede öffentliche Methode dieser Klasse ruft diese Methode als erstes auf,
+   * um zu garantieren, dass mit der Ausführung fortgefahren werden kann.
+   * Wenn die Instanz nicht initialisiert ist oder wenn das Literal nicht
+   * korrekt war, löst diese Methode eine Ausnahme in Form eines
+   * [FotyError]{@link module-foty.FotyError.html}s aus.
+   * @private
+   * @param {?function} callingFunction - function, which throws the error
+   * @param {...*} args - Arguments of `callingFunction`
+   * @throws [InitializationError]{@link module:foty~InitializationError}
+   * setting is not initalized
+   * @throws [LiteralError]{@link module:foty~LiteralError}
+   * literal has wrong format
+   */
+  z_$_throwIfNotUsable: function (callingFunction, ...args) {
+    let error
+    const callingFunctionArgs = args.join(', ')
+    if (!this._$_instance) {
+      error = new InitializationError(this, callingFunction, callingFunctionArgs,
+        'Zugriff vor Initialisierung'
+      )
+    } else if (!this._$_instance.usableConfiguration) {
+      error = new LiteralError(this, callingFunction, callingFunctionArgs,
+        'Das ist kein gültiges configuration object'
+      )
+    }
+    if (error) {
+      throw (error)
+    }
+  },
+  /** configuration.init: initializes from literal before first use
+   *
+   * Diese Funktion macht nichts, falls das Objekt bereits initialisiert ist.
+   *
+   * Ansonsten erzeugt sie aus knownSections diejenigen, die fehlen. Falls von
+   * den vorhandenen Properties eine keine [section]{@link module:foty~section}
+   * ist, sie aber den Schlüssel einer knownProperty hat, wird ihr der section
+   * Prototyp mit Object.setPrototype zugewiesen. Falls sie nicht den Namen einer
+   * knownProperty hat, wird eine Ausnahme ausgelöst.
+   *
+   * Am Ende wird für jede Eigenschaft deren
+   * [init]{@link module:foty~section#_$_init}
+   * Funktion aufgerufen.
+   * @throws [LiteralError]{@link module:foty~LiteralError}
+   * literal has wrong format
+   */
+  _$_init: function () {
+    if (this._$_instance) return
+    this.knownSections.forEach((sectionKey) => {
+      if (!this[sectionKey]) {
+        this[sectionKey] = { __proto__: section, } // add property (enumerable)
+      }
     })
-  }
-  //#region Dispatcher tests
-  static _ = null
-  static test(outputObj) {
-    // Dispatcher
-    Dispatcher._ = new TestSuite("Dispatcher", outputObj)
-    Dispatcher._.run(Dispatcher.constructorTest)
-    Dispatcher._.run(Dispatcher.toStringTest)
-    Dispatcher._.run(Dispatcher.registerEventTest)
-    Dispatcher._.run(Dispatcher.dispatchEventTest)
-    Dispatcher._.run(Dispatcher.addListenerTest)
-    Dispatcher._.destruct()
-    Dispatcher._ = null
-  }
-  static constructorTest() {
-    Dispatcher._.assert(1, Dispatcher._tryConstruct)
-    let dispatcher = new Dispatcher()
-    Dispatcher._.bassert(
-      2,
-      dispatcher.constructor === Dispatcher,
-      "the constructor property is not Dispatcher"
-    )
-  }
-  static toStringTest() {
-    let str = new Dispatcher().toString()
-    Dispatcher._.bassert(
-      1,
-      str.includes("°°"),
-      "does not contain module mark °°"
-    )
-  }
-  static registerEventTest() {
-    Dispatcher._.assert(1, Dispatcher._tryRegisterEvent, undefined)
-    Dispatcher._.assert(1, Dispatcher._tryRegisterEvent, "big bang")
-  }
-  static addListenerTest() {
-    Dispatcher._.assert(
-      1,
-      Dispatcher._tryAddListener,
-      "big bang",
-      undefined,
-      undefined
-    )
-  }
-  static dispatchEventTest() {
-    Dispatcher._.assert(1, Dispatcher._tryDispatchEvent, "big bang", undefined)
-  }
-  static _tryConstruct() {
-    new Dispatcher()
-  }
-  static _tryRegisterEvent(name) {
-    let d = new Dispatcher()
-    d.registerEvent(name)
-  }
-  static _tryAddListener(name, cbk, inst) {
-    let d = new Dispatcher()
-    d.registerEvent(name)
-    d.addListener(name, cbk, inst)
-  }
-  static _tryDispatchEvent(name, args) {
-    let d = new Dispatcher()
-    d.registerEvent(name)
-    d.dispatchEvent(name, args)
-  }
-  //#endregion Dispatcher tests
+    this._$_instance = { usableConfiguration: false, } // add property (enumerable)
+    for (const [key, value] of Object.entries(this)) {
+      if (key.startsWith('_$_')) {
+        continue
+      }
+      if (value._$_protoName !== 'section') {
+        if (this.knownSections.includes(key)) {
+          Object.setPrototypeOf(value, section)
+        } else {
+          throw (new LiteralError(
+            this,
+            this._$_init,
+            Array.prototype.join.call(arguments, ', '),
+            [
+              'Das Objekt enthält auf oberster Ebene',
+              'wenigstens einen Eintrag der keine section ist',
+            ]
+          ))
+        }
+      }
+      value._$_init(key)
+    }
+    this._$_instance.usableConfiguration = true
+  },
+  /** configuration:sections: returns array of section values
+   *
+   * Gibt alle Sektionen zurück
+   * @returns {Array.<section>} all [section]{@link module:foty~section} values
+   * @throws [InitializationError]{@link module:foty~InitializationError}
+   * configuration is not initalized
+   */
+  _$_sections: function () {
+    this.z_$_throwIfNotUsable(this._$_sections)
+    const sections = []
+    for (const [key, value] of Object.entries(this)) {
+      if (!key.startsWith('_$_') &&
+        !key.startsWith('z_$_')) {
+        sections.push(value)
+      }
+    }
+    return sections
+  },
+  /** configuration:section returns value for section `name`
+   * @param {string} name - name of section to be returned
+   * @returns {section} [section]{@link module:foty~section}
+   * @throws [InitializationError]{@link module:foty~InitializationError}
+   * configuration is not initalized
+   * @throws [AccessError]{@link module:foty~AccessError}
+   * no section with specified name
+   */
+  _$_section: function (name) {
+    this.z_$_throwIfNotUsable(this._$_section, name)
+    if (this[name] === undefined) {
+      throw (new AccessError(
+        this,
+        this._$_section,
+        Array.prototype.join.call(arguments, ', '),
+        'Die section existiert nicht'
+      ))
+    }
+    return this[name]
+  },
 }
-registeredTests.push(Dispatcher.test)
-
-//#endregion helper classes
-//#region Gene, Pool and Essence
-//  #region Callbacks
-/** callback to check {@link variable} against {@link gene}.
- * @callback GeneCallback
- * @param {*} variable
- * @param {Gene} gene
- * @returns {Boolean}
- */
-/** {@link GeneCallback}, returns whether {@link v} is an Object, but not an Array
- * @type {GeneCallback}
- * @param {*} v
- * @param {Gene} gene
- * @returns {Boolean}
- */
-function cbkIsObjectNotNullNotArray(v, gene) {
-  return typeof v === "object" && v !== null && !Array.isArray(v)
+const SECTION_GENERAL = {
+  _$_specialName: 'SECTION_GENERAL',
 }
-/** {@link GeneCallback}, returns whether {@link v} is Null
- * @type {GeneCallback}
- * @param {*} v
- * @param {Gene} gene
- * @returns {Boolean}
- */
-function cbkIsNull(v, gene) {
-  return typeof v === "object" && v === null
-}
-/** {@link GeneCallback}, returns whether {@link v} is an Array
- * @type {GeneCallback}
- * @param {*} v
- * @param {Gene} gene
- * @returns {Boolean}
- */
-function cbkIsArray(v, gene) {
-  return typeof v === "object" && Array.isArray(v)
-}
-/** {@link GeneCallback}, returns '{@link v} instanceof {@link gene.ident}'.
- * @type {GeneCallback}
- * @param {*} v
- * @param {Gene} gene
- * @returns {Boolean}
- */
-function cbkInstanceOf(v, gene) {
-  return v instanceof gene.ident
-}
-/** {@link GeneCallback}, returns  '{@link v}' typeof '{@link gene.ident}'.
- * @type {GeneCallback}
- * @param {*} v
- * @param {Gene} gene
- * @returns {Boolean}
- */
-function cbkTypeOf(v, gene) {
-  return typeof v === gene.ident
-}
-/** {@link GeneCallback}, returns '{@link v}' typeof '{@link gene.ident}.toLowerCase()'
- * @type {GeneCallback}
- * @param {*} v
- * @param {Gene} gene
- * @returns {Boolean}
- */
-function cbkTypeOfLc(v, gene) {
-  return typeof v === gene.ident.toLowerCase()
-}
-/** {@link GeneCallback}, returns '{@link v}' typeof '<code>string</code>'
- * @type {GeneCallback}
- * @param {*} v
- * @param {Gene} gene
- * @returns {Boolean}
- */
-function cbkIsDate(v, gene) {
-  return typeof v === "string"
-}
-//  #endregion Callbacks
-
-class Gene {
-  #cbk
-  #ident
-
-  /** Ident of the {@link Gene}.
-   * @type {*}
-   */
-  get ident() {
-    return this.#ident
-  }
-
-  /**
-   * @classdesc Gene is type used in this application.
-   *
-   * Every gene has a {@link GeneCallback} function associated with it. The default callback
-   * function is '
-   * <code>{@linkcode https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/typeof|typeof&#x2348;}</code>
-   * variable === {@link Gene#ident|Gene.ident}' . {@link Gene#is} calls this callback, comparing
-   * variable to check against ident of {@link Gene}.
-   *
-   * <b>Why this name? </b>
-   *
-   * Many types of types we have to deal with. Therefore another name for 'allowed
-   * types' was searched for. It should be short, have a meaning near to
-   * 'very basic' and it should reasonable not be used further in the code, so
-   * that name is replaceable throughout whole file, if another one would be
-   * chosen.
-   *
-   * The name has a flaw though: A real gene is something, a gene here is a
-   * something definition. In other words: A real gene can be compared to another
-   * real gene, e.g whether they are equal or which of them is longer. If you want
-   * to decide (still in real world) whether those somethings to be compared are
-   * genes at all, you need a gene definition. Here in this code {@link Gene}
-   * instance fulfills the job of a gene definition in real world.
-   * In {@link Gene#is|Gene.is} you give it a something and it decides,
-   * whether it is as defined in this instance.
-   * @constructor
-   * @description
-   * Constructs a Gene instance. Throws on wrong parameter types.
-   * @param {*} ident
-   * @param {GeneCallback} cbk - default is function {@link cbkTypeOf},
-   *                             which compares typeof its first parameter against
-   *                             {@link ident}
-   * @throws TypeError
-   */
-  constructor(ident, cbk) {
-    if (cbk != undefined && typeof cbk != "function")
-      throw new TypeError(
-        `function 'Gene.constructor'${NL}2nd parameter '${cbk}' is not of type 'Function'`
-      )
-    this.#ident = ident
-    this.#cbk = cbk === undefined ? cbkTypeOf : cbk
-  }
-
-  /** Returns result of Genes registered {@link GeneCallback}( {@link v}, {@link this} ).
-   * @param {*} v
-   * @returns {Boolean}
-   */
-  is(v) {
-    return this.#cbk(v, this)
-  }
-
-  //prettier-ignore
-  static test(outputObj) {
-    let _ = null
-    if(_ = new TestSuite("Gene", outputObj)) {
-      _.run(getterIdentTest)
-      _.run(constructorTest)
-      _.run(isTest)
-      _.destruct()
-      _ = null
-    }
-    function getterIdentTest() {
-      let idNull = null
-      let idUndE = undefined
-      let idBool = false
-      let idNumb = 22
-      let idBigI = 22n
-      let idStrI = "stringIdent"
-      let idSymB = Symbol("desc")
-      function idFunc() {return false}
-      let idObjE = new Error("df")
-
-      let gNull = new Gene(idNull)
-      let gUndE = new Gene(idUndE)
-      let gBool = new Gene(idBool)
-      let gNumb = new Gene(idNumb)
-      let gBigI = new Gene(idBigI)
-      let gStrI = new Gene(idStrI)
-      let gSymB = new Gene(idSymB)
-      let gFunc = new Gene(idFunc)
-      let gObjE = new Gene(idObjE)
-      _.bassert(1,gNull.ident === idNull,"should return what was given as ident")
-      _.bassert(2,gUndE.ident === idUndE,"should return what was given as ident")
-      _.bassert(3,gBool.ident === idBool,"should return what was given as ident")
-      _.bassert(4,gNumb.ident === idNumb,"should return what was given as ident")
-      _.bassert(5,gBigI.ident === idBigI,"should return what was given as ident")
-      _.bassert(6,gStrI.ident === idStrI,"should return what was given as ident")
-      _.bassert(7,gSymB.ident === idSymB,"should return what was given as ident")
-      _.bassert(8,gFunc.ident === idFunc,"should return what was given as ident")
-      _.bassert(8,gObjE.ident === idObjE,"should return what was given as ident")
-    }
-    function constructorTest() {
-      let un
-      _.shouldAssert(1,_tryConstruct,"number",22,"arg2 has to be a Function")
-      _.assert(2,_tryConstruct,"number",undefined,"arg2 may be undefined")
-
-      let idNull = null
-      let idUndE = undefined
-      let idBool = false
-      let idNumb = 22
-      let idBigI = 22n
-      let idStrI = "stringIdent"
-      let idSymB = Symbol("desc")
-      function idFunc() {return false}
-      let idObjE = new Error("df")
-      _.assert(11,_tryConstruct,idNull,un,"arg1 can be null")
-      _.assert(12,_tryConstruct,idUndE,un,"arg1 can be undefined")
-      _.assert(13,_tryConstruct,idBool,un,"arg1 can be boolean")
-      _.assert(14,_tryConstruct,idNumb,un,"arg1 can be number")
-      _.assert(15,_tryConstruct,idBigI,un,"arg1 can be bigint")
-      _.assert(16,_tryConstruct,idStrI,un,"arg1 can be string")
-      _.assert(17,_tryConstruct,idSymB,un,"arg1 can be symbol")
-      _.assert(18,_tryConstruct,idFunc,un,"arg1 can be function")
-      _.assert(19,_tryConstruct,idObjE,un,"arg1 can be object")
-    }
-    function isTest() {
-      function cbk(v,gene) {return typeof v === gene.ident.toLowerCase()}
-      function ACbk(v,gene) {return typeof v === "object" && Array.isArray(v)}
-      function aCbk(v,gene) {return gene.ident === "Array" && typeof v === "object" && Array.isArray(v)}
-      let g = new Gene("number")
-      let G = new Gene("Number")
-      let gG = new Gene("Number",cbk)
-      let A = new Gene("Array",ACbk)
-      let a = new Gene("array",aCbk)
-      _.bassert(1,g.is(22),"22 is a number")
-      _.bassert(2,!G.is(22),"22 is not a Number")
-      _.bassert(3,gG.is(22),"22 is a Number to lowercase")
-      _.bassert(4,A.is([]),"'[]' is an Array")
-      _.bassert(5,!A.is({}),"'{}' is not an Array")
-      _.bassert(6,!a.is([]),"'[]' nothing can be an array")
-      _.bassert(7,!a.is({}),"'{}' nothing can be an array")
-    }
-    function _tryConstruct(arg1, arg2) {
-      new Gene(arg1,arg2)
-    }
-  }
-}
-registeredTests.push(Gene.test)
-registeredExceptions.push("new Gene('name',3)")
-
-class GenePool {
-  #genes = {}
-  #defaultCallback = cbkInstanceOf
-
-  /**
-   * @classdesc Collection of  Genes.
-   *
-   *
-   * Stores  {@link Gene}s. The default {@link GeneCallback|callback} function for newly created
-   * {@link Gene}s is '{@link cbkInstanceOf}'. (Whereas the default {@link GeneCallback}|callback)
-   * function for plain {@link Gene}s is '{@link cbkTypeOf}').
-   * '.
-   * @constructor
-   * @description Creates new instance of {@link GenePool}.
-   *
-   * If not set to an other value, the default {@link GeneCallback|callback} function is {@link cbkInstanceOf}.
-   *
-   * If first parameter is a function, it becomes the default {@link GeneCallback|callback} function.
-   * All other parameters (including the first, if not a function) are registered as {@link Gene}s
-   * with the default {@link GeneCallback|callback} function set as {@link GeneCallback|callback} function .
-   *
-   * should never throw
-   * @param  {...*} params
-   */
-  constructor(...params) {
-    if (params.length > 0 && typeof params[0] === "function")
-      this.#defaultCallback = params.shift()
-    while (params.length > 0)
-      this.addGene(params.shift(), this.#defaultCallback)
-  }
-
-  /**
-   * Adds {@link ident} as new Gene with {@link cbk} as {@link GeneCallback|callback} function.
-   *
-   * If {@link cbk} is undefined, the newly created {@link Gene} gets default {@link GeneCallback|callback} function
-   * as {@link GeneCallback|callback} function
-   *
-   * The newly created {@link Gene} is returned. <br>
-   * If {@link ident} is already set, it is not changed, but returned at it is.
-   * @param {*} ident
-   * @param {Function|undefined} cbk
-   * @throws TypeError - does not catch from {@link @Gene|Gene.constructor}, which
-   * throws if given {@link cbk} is no function
-   * @returns {Gene}
-   */
-  addGene(ident, cbk) {
-    if (this.#genes[ident] === undefined)
-      this.#genes[ident] = new Gene(
-        ident,
-        cbk === undefined ? this.#defaultCallback : cbk
-      )
-    return this.#genes[ident]
-  }
-
-  /**
-   * Returns whether {@link ident} contained in this pool.
-   * @param {*} ident
-   * @returns {Boolean}
-   */
-  hasGene(ident) {
-    return this.#genes[ident] != undefined
-  }
-
-  /**
-   * Returns number of {@link Gene}s in this pool
-   * @returns {Number}
-   */
-  length() {
-    return Object.keys(this.#genes).length
-  }
-  /**
-   * Returns whether {@link v} fulfills {@link ident}s requirements as {@link Gene}.
-   *
-   * Returns false, if {@link ident} is no {@link Gene} of this pool.
-   *
-   * {@link ident}s, which are strings, compounds {@link ident}s are possible:<br>
-   * - ({@link ident1}|{@link ident2}|{@link ident3})<br>
-   * - Array.&lt;{@link ident1}&gt;<br>
-   * - combination of both
-   *
-   * <b>Remark:</b><br>
-   * It is not static, because {@link v} is only compared against {@link Gene}s
-   * in this {@link GenePool|pool}
-   * @param {*} v
-   * @param {*} ident
-   * @returns {Boolean}
-   */
-  isA(v, ident) {
-    if (GenePool.isCompoundOr(ident)) {
-      let ids = ident.slice(1, -1).split("|")
-      return ids.some((id) => this.isA(v, id), this)
-    } else if (GenePool.isCompoundArr(ident)) {
-      if (!Array.isArray(v)) return false
-      let innerIdent = ident.slice("Array.<".length, -1)
-      return v.every((innerV) => this.isA(innerV, innerIdent), this)
-    } else {
-      if (!this.hasGene(ident)) return false
-      return this.#genes[ident].is(v)
-    }
-  }
-  toDisplayString() {
-    return "°°°" + this.constructor.name
-  }
-
-  static isCompoundOr(id) {
-    let answ = false
-    if (typeof id === "string") {
-      if (id.startsWith("(") && id.endsWith(")")) answ = true
-    }
-    return answ
-  }
-  static isCompoundArr(id) {
-    let answ = false
-    if (typeof id === "string") {
-      if (id.startsWith("Array.<") && id.endsWith(">")) answ = true
-    }
-    return answ
-  }
-
-  //prettier-ignore
-  static test(outputObj) {
-    let _ = null
-    if(_ = new TestSuite("GenePool", outputObj)) {
-      _.run(constructorTest)
-      _.run(addTest)
-      _.run(hasTest)
-      _.run(lengthTest)
-      _.run(isATest)
-      _.destruct()
-      _ = null
-    }
-    function constructorTest() {
-      let idNull = null
-      let idUndE = undefined
-      let idBool = false
-      let idNumb = 22
-      let idBigI = 22n
-      let idStrI = "stringIdent"
-      let idSymB = Symbol("desc")
-      function idFunc() {return false}
-      let idObjE = new Error("df")
-      _.assert(1,_tryConstruct1,idNull,"should construct, any id allowed")
-      _.assert(2,_tryConstruct1,idUndE,"should construct, any id allowed")
-      _.assert(3,_tryConstruct1,idBool,"should construct, any id allowed")
-      _.assert(4,_tryConstruct1,idNumb,"should construct, any id allowed")
-      _.assert(5,_tryConstruct1,idBigI,"should construct, any id allowed")
-      _.assert(6,_tryConstruct1,idStrI,"should construct, any id allowed")
-      _.assert(7,_tryConstruct1,idSymB,"should construct, any id allowed")
-      _.assert(8,_tryConstruct2,"abc",idFunc,"should construct, any id allowed")
-      _.assert(9,_tryConstruct1,idObjE,"should construct, any id allowed")
-
-      _.assert(21,_tryConstruct0,"should construct")
-      _.assert(22,_tryConstruct2,"String","Number","should construct")
-      _.assert(23,_tryConstruct3,"String","Number","Boolean","should construct")
-      _.assert(24,_tryConstruct4,"String","Number","Boolean","Function","should construct")
-      _.assert(25,_tryConstruct1,{},"should construct")
-      _.assert(26,_tryConstruct2,"String",{},"should construct")
-      _.assert(27,_tryConstruct3,"String","Number",{},"should construct")
-      _.assert(28,_tryConstruct4,{},"Number","Boolean","Function","should construct")
-    }
-    function addTest() {
-      let gns = new GenePool(cbkTypeOfLc,"Number")
-      let gn = gns.addGene("Number")
-      let gn2
-      _.bassert(1, gn = gns.addGene("Number"),"Trying to add existing Gene should return it")
-      _.bassert(2, gn.ident === "Number", "The existing Gene should be returned")
-      _.shouldAssert(3,_tryAdd,gns,"abc",22,"Adding Gene with no function as callback should throw")
-
-      let idNull = null
-      let idUndE = undefined
-      let idBool = false
-      let idNumb = 22
-      let idBigI = 22n
-      let idStrI = "stringIdent"
-      let idSymB = Symbol("desc")
-      function idFunc() {return false}
-      let idObjE = new Error("df")
-      let gnNull
-      let gnUndE
-      let gnBool
-      let gnNumb
-      let gnBigI
-      let gnStrI
-      let gnSymB
-      let gnFunc
-      let gnObjE
-      _.bassert(11, gnNull = gns.addGene(idNull),"null should be added")
-      _.bassert(12, gnUndE = gns.addGene(idUndE),"null should be added")
-      _.bassert(13, gnBool = gns.addGene(idBool),"null should be added")
-      _.bassert(14, gnNumb = gns.addGene(idNumb),"null should be added")
-      _.bassert(15, gnBigI = gns.addGene(idBigI),"null should be added")
-      _.bassert(16, gnStrI = gns.addGene(idStrI),"null should be added")
-      _.bassert(17, gnSymB = gns.addGene(idSymB),"null should be added")
-      _.bassert(18, gnFunc = gns.addGene(idFunc),"null should be added")
-      _.bassert(19, gnObjE = gns.addGene(idObjE),"null should be added")
-
-
-      _.bassert(21, gnNull.ident === idNull,"The added Gene should be added")
-      _.bassert(22, gnUndE.ident === idUndE,"The added Gene should be added")
-      _.bassert(23, gnBool.ident === idBool,"The added Gene should be added")
-      _.bassert(24, gnNumb.ident === idNumb,"The added Gene should be added")
-      _.bassert(25, gnBigI.ident == idBigI,"The added Gene should be added")
-      _.bassert(26, gnStrI.ident === idStrI,"The added Gene should be added")
-      _.bassert(27, gnSymB.ident === idSymB,"The added Gene should be added")
-      _.bassert(28, gnFunc.ident === idFunc,"The added Gene should be added")
-      _.bassert(29, gnObjE.ident === idObjE,"The added Gene should be added")
-    }
-    function hasTest() {
-      let gns = new GenePool(cbkTypeOfLc,"Number")
-      _.bassert(1,gns.hasGene("Number"),"'Number' was given to constructor")
-      _.bassert(2,!gns.hasGene("number"),"'number' was not given to constructor")
-      _.bassert(3,!gns.hasGene("string"),"'string' was not given to constructor")
-      _.bassert(4,!gns.hasGene(),"undefined is not given to constructor")
-      _.bassert(5,!gns.hasGene({}),"'{}' is not given to constructor")
-
-      let idNull = null
-      let idUndE = undefined
-      let idBool = false
-      let idNumb = 22
-      let idBigI = 22n
-      let idStrI = "stringIdent"
-      let idSymB = Symbol("desc")
-      function idFunc() {return false}
-      let idObjE = new Error("df")
-      let gns2 = new GenePool()
-      gns2.addGene(idNull)
-      gns2.addGene(idUndE)
-      gns2.addGene(idBool)
-      gns2.addGene(idNumb)
-      gns2.addGene(idBigI)
-      gns2.addGene(idStrI)
-      gns2.addGene(idSymB)
-      gns2.addGene(idFunc)
-      gns2.addGene(idObjE)
-      _.bassert(11,gns2.hasGene(idNull), "id had been added")
-      _.bassert(12,gns2.hasGene(idUndE), "id had been added")
-      _.bassert(13,gns2.hasGene(idBool), "id had been added")
-      _.bassert(14,gns2.hasGene(idNumb), "id had been added")
-      _.bassert(15,gns2.hasGene(idBigI), "id had been added")
-      _.bassert(16,gns2.hasGene(idStrI), "id had been added")
-      _.bassert(17,gns2.hasGene(idSymB), "id had been added")
-      _.bassert(18,gns2.hasGene(idFunc), "id had been added")
-      _.bassert(19,gns2.hasGene(idObjE), "id had been added")
-    }
-    function lengthTest() {
-      let pool0 = new GenePool()
-      let pool1 = new GenePool(1)
-      let pool2 = new GenePool(1,2)
-      let pool3 = new GenePool(1,2,3)
-      let pool4 = new GenePool(1,2,3)
-      pool4.addGene("Number",cbkTypeOfLc)
-      _.bassert(0,pool0.length() == 0, "no genes added")
-      _.bassert(1,pool1.length() == 1, "1 gene added")
-      _.bassert(2,pool2.length() == 2, "2 genes added")
-      _.bassert(3,pool3.length() == 3, "3 genes added")
-      _.bassert(4,pool4.length() == 4, "4 genes added")
-    }
-    function isATest() {
-      let gns = new GenePool(cbkTypeOfLc,"Number")
-      _.bassert(1,gns.isA(22,"Number"),"22 is Number")
-      _.bassert(2,!gns.isA({},"Number"),"'{}' is no Number")
-      _.bassert(3,!gns.isA(),"no arguments given should return false")
-      _.bassert(4,!gns.isA({}),"2nd argument not given should return false")
-      _.bassert(5,!gns.isA({},{}),"2nd argument not a string should return false")
-      _.bassert(6,!gns.isA({},"String"),"2nd argument not allowed type should return false")
-
-      let gns2 = new GenePool(cbkTypeOfLc,"Number","Boolean","String")
-      _.bassert(11,gns2.isA(["a","b","c"],"Array.<String>"),"array of strings should be recognized")
-      _.bassert(12,!gns2.isA(["a","b",3],"Array.<String>"),"array of strings with number should be rejected")
-      _.bassert(13,gns2.isA(3,"(String|Number)"),"Number should be recognized for String or Number")
-      _.bassert(14,gns2.isA("a","(String|Number)"),"String should be recognized for String or Number")
-      _.bassert(15,!gns2.isA(false,"(String|Number)"),"Boolean should not be recognized for String or Number")
-      _.bassert(16,gns2.isA(["a","b","c"],"(String|Array.<String>)"),"array of strings should be recognized for String or Array of Strings")
-      _.bassert(17,gns2.isA("a","(String|Array.<String>)"),"String should be recognized for String or Array of Strings")
-      _.bassert(18,gns2.isA(2,"(Number|Array.<String>)"),"Number should be recognized for Number or Array of Strings")
-
-      let idNull = null
-      let idUndE = undefined
-      let idBool = false
-      let idNumb = 22
-      let idBigI = 22n
-      let idStrI = "stringIdent"
-      let idSymB = Symbol("desc")
-      function idFunc() {return false}
-      let idObjE = new Error("df")
-      let gns3 = new GenePool()
-      function cbkNull(v, gene) {return typeof(v === "object" && v === undefined)}
-      function cbkUndE(v, gene) {return typeof(v === "undefined")}
-      function cbkBool(v, gene) {return typeof(v === "boolean")}
-      function cbkNumb(v, gene) {return typeof(v === "number")}
-      function cbkBigI(v, gene) {return typeof(v === "bigint")}
-      function cbkStrI(v, gene) {return typeof(v === "string")}
-      function cbkSymB(v, gene) {return typeof(v === "symbol")}
-      function cbkFunc(v, gene) {return typeof(v === "function")}
-      function cbkObjE(v, gene) {return typeof(v === "object")}
-      gns3.addGene(idNull,cbkNull)
-      gns3.addGene(idUndE,cbkUndE)
-      gns3.addGene(idBool,cbkBool)
-      gns3.addGene(idNumb,cbkNumb)
-      gns3.addGene(idBigI,cbkBigI)
-      gns3.addGene(idStrI,cbkStrI)
-      gns3.addGene(idSymB,cbkSymB)
-      gns3.addGene(idFunc,cbkFunc)
-      gns3.addGene(idObjE,cbkObjE)
-
-      _.bassert(21,gns3.isA(idNull,idNull), "should be a, see cbk")
-      _.bassert(22,gns3.isA(idUndE,idUndE), "should be a, see cbk")
-      _.bassert(23,gns3.isA(idBool,idBool), "should be a, see cbk")
-      _.bassert(24,gns3.isA(idNumb,idNumb), "should be a, see cbk")
-      _.bassert(25,gns3.isA(idBigI,idBigI), "should be a, see cbk")
-      _.bassert(26,gns3.isA(idStrI,idStrI), "should be a, see cbk")
-      _.bassert(27,gns3.isA(idSymB,idSymB), "should be a, see cbk")
-      _.bassert(28,gns3.isA(idFunc,idFunc), "should be a, see cbk")
-      _.bassert(29,gns3.isA(idObjE,idObjE), "should be a, see cbk")
-    }
-    function _tryConstruct0() { new GenePool() }
-    function _tryConstruct1(a) { new GenePool(a) }
-    function _tryConstruct2(a,b) { new GenePool(a,b) }
-    function _tryConstruct3(a,b,c) { new GenePool(a,b,c) }
-    function _tryConstruct4(a,b,c,d) { new GenePool(a,b,c,d) }
-    function _tryAdd(genes, arg1, arg2) {genes.add(arg1, arg2)}
-  }
-}
-registeredTests.push(GenePool.test)
-registeredExceptions.push("new GenePool().add('noGene','noFunction')")
-
-class Essence extends GenePool {
-  //#region member variables
-  /**
-   * Default hardcoded key for SPEC sections
-   * @type {String}
-   */
-  static #DEFAULT_HARDCODED_SPEC_KEY = "_S_P_E_C_"
-  #specificationPool = new GenePool()
-  #SPEC_KEY = Essence.#DEFAULT_HARDCODED_SPEC_KEY
-  #skipped = [] //[{.name,.value,.expectedType}]
-  /**
-   * @type {GenePool}
-   */
-  get specificationPool() {
-    return this.#specificationPool
-  }
-  /**
-   * @type {String}
-   */
-  get SPEC_KEY() {
-    return this.#SPEC_KEY
-  }
-  /** skipped essences
-   * @type {Array.<Object>}
-   */
-  get skipped() {
-    return this.#skipped
-  }
-  /** ROOT essence, set automatically
-   * @type {Boolean}
-   */
-  get ROOT() {
-    return this[Essence.#pre + "ROOT"]
-  }
-  /** RENDER essence, inherited
-   * @type {Boolean|undefined}
-   */
-  get RENDER() {
-    return this[Essence.#pre + "RENDER"]
-  }
-  /** TYPE essence, inherited
-   * @type {String}
-   */
-  get TYPE() {
-    return this[Essence.#pre + "TYPE"]
-  }
-  /** DEFAULT essence, individual<br>
-   *  is of type given in {@link Essence#TYPE|Essence.TYPE}
-   * @type {*}
-   */
-  get DEFAULT() {
-    return this[Essence.#pre + "DEFAULT"]
-  }
-  /** VALUE essence, individual<br>
-   *  is of type given in {@link Essence#TYPE|Essence.TYPE}
-   * @type {*}
-   */
-  get VALUE() {
-    return this[Essence.#pre + "VALUE"]
-  }
-  /** IGNORE essence, inherited
-   * @type {Boolean}
-   */
-  get IGNORE() {
-    return this[Essence.#pre + "IGNORE"]
-  }
-  /** PARSE essence, inherited
-   *
-   * Only for internal use.
-   * If set to false, no Essences will be added. This is the only
-   * case, in which no Essences are possible. If used internally, instance has
-   * to be parsed later before returning. Never ever an instance without
-   * Essences should be given out from the using code.
-   * @type {Boolean}
-   */
-  get PARSE() {
-    return this[Essence.#pre + "PARSE"]
-  }
-  /** INTERNAL essence, inherited
-   * @type {Boolean}
-   */
-  get INTERNAL() {
-    return this[Essence.#pre + "INTERNAL"]
-  }
-  /** FLAT essence, individual
-   * @type {Boolean}
-   */
-  get FLAT() {
-    return this[Essence.#pre + "FLAT"]
-  }
-  /** LOCAL essence, inherited
-   * @type {Boolean}
-   */
-  get LOCAL() {
-    return this[Essence.#pre + "LOCAL"]
-  }
-  /** ONCE essence, individual
-   * @type {Boolean}
-   */
-  get ONCE() {
-    return this[Essence.#pre + "ONCE"]
-  }
-  /** REPEAT essence, individual
-   * @type {Boolean}
-   */
-  get REPEAT() {
-    return this[Essence.#pre + "REPEAT"]
-  }
-
-  static #pre = GLOBAL_namePartHiddenPropertiesStartWith // "__"
-  static #RENDER_DEFT = GLOBAL_RENDER_DEFAULT // false
-  static #TYPE_DEFT = GLOBAL_TYPE_DEFAULT // "String"
-  static #DEFAULT_DEFT = GLOBAL_DEFAULT_DEFAULT // ""
-  static #VALUE_DEFT = GLOBAL_VALUE_DEFAULT // ""
-  static #IGNORE_DEFT = GLOBAL_IGNORE_DEFAULT // false
-  static #PARSE_DEFT = GLOBAL_PARSE_DEFAULT  // true
-  static #INTERNAL_DEFT = GLOBAL_INTERNAL_DEFAULT  // false
-  static #FLAT_DEFT = GLOBAL_FLAT_DEFAULT  // false
-  static #LOCAL_DEFT = GLOBAL_LOCAL_DEFAULT  // false
-  static #ONCE_DEFT = GLOBAL_ONCE_DEFAULT  // false
-  static #REPEAT_DEFT = GLOBAL_REPEAT_DEFAULT  // false
-  //#endregion member variables
-  /**
-   * @classdesc Essence is unrecognizable except through me.
-   * Reads and removes specification properties from literal and stores
-   * them as tokens. Specification
-   * properties are found in specification sections, which are  objects with a certain
-   * specification key. The hardcoded default of this key is
-   * {@link Essence#DEFAULT_HARDCODED_SPEC_KEY|Essence.#DEFAULT_HARDCODED_SPEC_KEY}.
-   * On construction a different key can be set.
-   *
-   * There exists a set of predefined tokens.  Tokens can be individual or
-   * inherited.  After initialization of an
-   * Essence instance, each token is always there.
-   * Either as found in specification section or as
-   * given from parent if one and if inherited or at least as hardcoded default.
-   * They have to be of certain {@link Gene}, e.g. the value for the
-   * {@link Essence.getRENDER|RENDER} token has to be a Boolean or undefined.
-   * If some specification  entry
-   * has wrong  {@link Gene} it will be {@link Essence#skipped|skipped} and
-   * parent token value if inherited or if no parent or individual
-   * hardcoded value will be used.
-   *
-   * Essence has to do with two {@link GenePool}s. The one that it is and that it's
-   * subclasses will be. The other is the
-   * {@link Essence#specificationPool|Essence.specificationPool}.
-   * This one it uses to check the specification properties in the literal given
-   * to it.
-   *
-   * All known specification properties in the literals specification object
-   * are changed to invisible and unremovable properties, the tokens, of this instance,
-   * which represents the literal for subclass instances.
-   * They also are added to the literal containing the specification object as invisible
-   * and unremovable properties. Those can be questioned using static get functions
-   * ({@link Essence.getDEFAULT} - {@link Essence.getVALUE})
-   * of {@link Essence}
-   *
-   * This class is pure essence. Without filling some {@link Gene}s in
-   * {@link Essence#specificationPool|Essence.specificationPool} it only produces
-   * default token values.
-   * @mermaid
-   *  classDiagram
-   *      GenePool <|-- Essence
-   * @extends GenePool
-   * @constructor
-   * @description
-   * Creates {@link Essence} instance.
-   *
-   * Adds {@link Object}, {@link Gene}, {@link GenePool} and {@link Essence}
-   * to its pool as Genes with {@link GeneCallback|callback} {@link cbkInstanceOf}.
-   * @param {String} spec_key - no type check, but only implemented for
-   * {@type String} and tested against {@type String}.
-   */
-  constructor(spec_key = Essence.#DEFAULT_HARDCODED_SPEC_KEY) {
-    super()
-    this.#SPEC_KEY = spec_key
-    this.addGene(Object)
-    this.addGene(Gene)
-    this.addGene(GenePool)
-    this.addGene(Essence)
-  }
-  /**
-   * Creates the tokens.
-   *
-   * Removes {@link Essence#SPEC_KEY|this.SPEC_KEY} property from {@link literal} and
-   * removes all <code class="bordered"><a href="#zweitens">
-   * specification properties</a> </code> from literal if value of
-   * {@link Essence#SPEC_KEY|this.SPEC_KEY} property is not of type <code>Boolean</code>.
-   *
-   * Adds recognized <code class="bordered"><a href="#zweitens">
-   * specification properties</a> </code>
-   * from {@link literal} as hidden properties (tokens)
-   * to this instance and {@link literal}.<br>
-   * Adds hidden properties which are not given in {@link literal}
-   * with parent value (if inherited) or hardcoded default value
-   * to this instance and {@link literal}.
-   *
-   * Values in literal with wrong type (e.g. if value of {@link Essence#IGNORE|IGNORE}
-   * is <code>yes</code>) will be skipped and added to {@link skipped}.
-   * <p id="zweitens">
-   * Recognized <code  class="bordered">{@link this#SPEC_KEY|__SPEC} properties</code> are:
-   * {@link Essence#RENDER|RENDER} (inherited),
-   * {@link Essence#TYPE|TYPE} (inherited),
-   * {@link Essence#DEFAULT|DEFAULT},
-   * {@link Essence#VALUE|VALUE},
-   * {@link Essence#IGNORE|IGNORE} (inherited),
-   * {@link Essence#FLAT|FLAT},
-   * {@link Essence#LOCAL|LOCAL} (inherited),
-   * {@link Essence#ONCE|ONCE},
-   * {@link Essence#REPEAT|REPEAT} (individual) and
-   * Also {@link Essence#ROOT|ROOT} is added, with value dependent
-   * whether {@link parent}
-   * is defined. There are some more <code>specification properties</code> for
-   * internal use. Other entries in {@link literal} are ignored.<br>
-   * Tokens are never undefined, even not
-   * it they make no sense. Essence is not about sense.
-   * @param {(Undefined|Object)} literal
-   * @param {(Undefined|GenePool)} parent
-   * @param {(Undefined|String)} name - for checking tests
-   * @throws TypeError
-   */
-  parse(literal, parent, name) {
-    if (LOG_ESSENCE_CONSTRUCTOR_2_CONSOLE) {
-      let name_x =
-        name === undefined
-          ? "undefined"
-          : typeof name == "symbol"
-          ? "_Symbol_" + GLOBAL_SYMBOL_COUNTER++
-          : name
-      let literal_x =
-        literal === undefined
-          ? "undefined"
-          : literal === null
-          ? "Null"
-          : false
-          ? JSON.stringify(literal, null, 4)
-          : flatten(literal)
-      let specLit_x =
-        literal != undefined ? flatten(literal[this.SPEC_KEY]) : "undefined"
-      let line_x = ""
-      if (parent == undefined)
-        line_x = "----------------------------------------------------"
-      aut(
-        `START Essence parse----  ${name_x}  ${line_x}---------\n   SPEC: ${specLit_x}\n   Literal :${literal_x}`,
-        lime
-      )
-    }
-    if (parent != undefined && !this.isA(parent, GenePool))
-      throw new TypeError(
-        `function 'Essence.parse'${NL}2nd parameter '${parent}' is not of type 'GenePool'`
-      )
-    if (literal != undefined && typeof literal != "object")
-      throw new TypeError(
-        `function 'Essence.parse'${NL}1st parameter '${literal}' is not of type 'Object'`
-      )
-    let un
-    let p = parent
-    let specLit = {}
-    if (literal != un) specLit = literal[this.#SPEC_KEY]
-    if (typeof specLit == "boolean") {
-      specLit = literal
-      specLit["FLAT"] = true
-    }
-    if (specLit === un) specLit = {}
-    if (specLit["PARSE"] === false) return
-
-    function changeToHiddenProp(me, lit, specL, key, type, p, def, val, name) {
-      let v
-      if (val != undefined) v = val
-      else {
-        let given = specL[key]
-        delete specL[key]
-        if (!me.#validateOrInform(given, type, key)) given = undefined
-        v = given != undefined ? given : p != undefined ? p[key] : def
-      }
-      // Add hidden property to me
-      Object.defineProperty(me, Essence.#pre + key, {
-        value: v,
-        writable: false,
-        configurable: false,
-        enumerable: false,
-      })
-      try {
-        Object.defineProperty(lit, Essence.#pre + key, {
-          value: v,
-          writable: false,
-          configurable: false,
-          enumerable: false,
-        })
-      } catch (e) {
-        let col = undefined
-        if (lit != undefined && Essence.getINTERNAL(lit)) col = red
-        if (!TESTING && !col && !CHECK_ERROR_OUTPUT) {
-          vaut(name, e, col)
-          throw e
-        }
-      }
-    }
-    let hide = changeToHiddenProp
-    let l = literal
-    let s = specLit
-    let n = name
-    // 6th arg p: Property is inherited
-    // 6th arg un: Property is individual
-    hide(this, l, s, "ROOT", "Boolean",     p, un, parent == un, n)
-    hide(this, l, s, "RENDER", "Boolean",   p, Essence.#RENDER_DEFT, un, n)
-    hide(this, l, s, "TYPE", "String",      p, Essence.#TYPE_DEFT, un, n)
-    hide(this, l, s, "IGNORE", "Boolean",   p, Essence.#IGNORE_DEFT, un, n)
-    hide(this, l, s, "PARSE", "Boolean",    p, Essence.#PARSE_DEFT, un, n)
-    hide(this, l, s, "INTERNAL", "Boolean", p, Essence.#INTERNAL_DEFT, un, n)
-    hide(this, l, s, "FLAT", "Boolean",     un, Essence.#FLAT_DEFT, un, n)
-    hide(this, l, s, "LOCAL", "Boolean",    p, Essence.#LOCAL_DEFT, un, n)
-    hide(this, l, s, "ONCE", "Boolean",     un, Essence.#ONCE_DEFT, un, n)
-    hide(this, l, s, "REPEAT", "Boolean",   un, Essence.#REPEAT_DEFT, un, n)
-    hide(this, l, s, "DEFAULT", this.TYPE,  un, Essence.#DEFAULT_DEFT, un, n)
-    hide(this, l, s, "VALUE", this.TYPE,    un, Essence.#VALUE_DEFT, un, n)
-
-    if (literal != un) delete literal[this.#SPEC_KEY]
-    if (LOG_ESSENCE_CONSTRUCTOR_2_CONSOLE) {
-      let name_x =
-        name === undefined
-          ? "undefined"
-          : typeof name == "symbol"
-          ? "_Symbol_" + GLOBAL_SYMBOL_COUNTER++
-          : name
-      let literal_x =
-        literal === undefined
-          ? "undefined"
-          : literal === null
-          ? "Null"
-          : false
-          ? JSON.stringify(literal, null, 4)
-          : flatten(literal)
-      let specLit_x = specLit != undefined ? flatten(specLit) : "undefined"
-      let flat_x = this.FLAT ? "FLAT" : "flat"
-      let ignore_x = this.IGNORE ? "IGNORE" : "ignore"
-      let root_x = this.ROOT ? "ROOT" : "root"
-      let repeat_x = this.REPEAT ? "REPEAT" : "repeat"
-      let render_x = this.RENDER ? "RENDER" : "render"
-      let value_x = this.VALUE.length ? "VALUE" : "value"
-      let default_x = this.DEFAULT.length ? "DEFAULT" : "default"
-      let type_x = "type"
-      if (literal != undefined)
-        aut(
-          `\
-${flat_x}:${Essence.getFLAT(literal)} \
-${ignore_x}:${Essence.getIGNORE(literal)} \
-${root_x}:${Essence.getROOT(literal)} \
-${repeat_x}:${Essence.getREPEAT(literal)} \
-${render_x}:${Essence.getRENDER(literal)}
-${value_x}:'${Essence.getVALUE(literal)}' \
-${default_x}:'${Essence.getDEFAULT(literal)}' \
-${type_x}:${Essence.getTYPE(literal)} \
-`,
-          blue
-        )
-      aut(
-        `   SPEC: ${specLit_x}\n   Literal :${literal_x}
-${flat_x}:${this.FLAT} \
-${ignore_x}:${this.IGNORE} \
-${root_x}:${this.ROOT} \
-${repeat_x}:${this.REPEAT} \
-${render_x}:${this.RENDER}
-${value_x}:'${this.VALUE}' \
-${default_x}:'${this.DEFAULT}' \
-${type_x}:${this.TYPE} \
-`,
-        lime
-      )
-      aut(
-        `ENDE Essence parse----  ${name_x}  \
---------------------------------------------------------------`,
-        lime
-      )
-    }
-  }
-  #validateOrInform(value, type, name) {
-    let ok = value === undefined || this.#specificationPool.isA(value, type)
-    if (!ok) {
-      let errObj = {}
-      errObj.name = name
-      errObj.value = value
-      errObj.expectedType = type
-      this.#skipped.push(errObj)
-    }
-    return ok
-  }
-
-  /**
-   * Returns false if literal's __SPEC has PARSE set to false, true else
-   * @param {Object} literal
-   * @returns {Boolean}
-   */
-  static doParse(literal) {
-    let answ = true
-    if (typeof literal == "object" && literal != null) {
-      let spec = literal["__SPEC"]
-      if (typeof spec == "object" && spec != null) {
-        if (spec["PARSE"] !== undefined) answ = spec["PARSE"] !== false
-      }
-    }
-    return answ
-  }
-  //#region static getESSENCE from literal
-  /** ROOT essence, set automatically
-   * @param {Object} lit
-   * @returns {Boolean}
-   */
-  static getROOT(lit) {
-    return lit[Essence.#pre + "ROOT"]
-  }
-  /** RENDER essence, inherited
-   * @param {Object} lit
-   * @returns {Boolean}
-   */
-  static getRENDER(lit) {
-    return lit[Essence.#pre + "RENDER"]
-  }
-  /** TYPE essence, individual
-   * @param {Object} lit
-   * @returns {String}
-   */
-  static getTYPE(lit) {
-    return lit[Essence.#pre + "TYPE"]
-  }
-  /** DEFAULT essence, individual<br>
-   *  is of type given in {@link Essence#TYPE|Essence.TYPE}
-   * @param {Object} lit
-   * @returns {*}
-   */
-  static getDEFAULT(lit) {
-    return lit[Essence.#pre + "DEFAULT"]
-  }
-  /** VALUE essence, individual<br>
-   *  is of type given in {@link Essence#TYPE|Essence.TYPE}
-   * @param {Object} lit
-   * @returns {*}
-   */
-  static getVALUE(lit) {
-    return lit[Essence.#pre + "VALUE"]
-  }
-  /** IGNORE essence, inherited
-   * @param {Object} lit
-   * @returns {Boolean}
-   */
-  static getIGNORE(lit) {
-    return lit[Essence.#pre + "IGNORE"]
-  }
-  /** PARSE essence, individual
-   * @param {Object} lit
-   * @returns {Boolean}
-   */
-  static getPARSE(lit) {
-    return lit[Essence.#pre + "PARSE"]
-  }
-  /** INTERNAL essence, inherited
-   * @param {Object} lit
-   * @returns {Boolean}
-   */
-  static getINTERNAL(lit) {
-    return lit[Essence.#pre + "INTERNAL"]
-  }
-  /** FLAT essence, inherited
-   * @param {Object} lit
-   * @returns {Boolean}
-   */
-  static getFLAT(lit) {
-    return lit[Essence.#pre + "FLAT"]
-  }
-  /** LOCAL essence, individual
-   * @param {Object} lit
-   * @returns {Boolean}
-   */
-  static getLOCAL(lit) {
-    return lit[Essence.#pre + "LOCAL"]
-  }
-  /** ONCE essence, individual
-   * @param {Object} lit
-   * @returns {Boolean}
-   */
-  static getONCE(lit) {
-    return lit[Essence.#pre + "ONCE"]
-  }
-  /** REPEAT essence, individual
-   * @param {Object} lit
-   * @returns {Boolean}
-   */
-  static getREPEAT(lit) {
-    return lit[Essence.#pre + "REPEAT"]
-  }
-  //#endregion static getESSENCE from literal
-
-  //prettier-ignore
-  static test(outputObj) {
-    let _ = null
-    if(_ = new TestSuite("Essence", outputObj)) {
-      _.run(getterSPEC_KEYTest)
-      _.run(getterSpecificationPoolTest)
-      _.run(getterEssencesTest)
-      _.run(constructorTest)
-      _.run(isATest)
-      _.run(parseTest)
-      _.run(doParseTest)
-      _.run(getEssencesTest)
-      _.destruct()
-      _ = null
-    }
-    function getterSPEC_KEYTest() {
-      let ess1 = new Essence()
-      let ess2 = new Essence("x")
-      _.bassert(1,ess1.SPEC_KEY == "_S_P_E_C_", "Default hardcoded SPEC key")
-      _.bassert(2,ess2.SPEC_KEY == "x", "x given as SPEC key")
-    }
-    function getterSpecificationPoolTest(){
-      let ess1 = new Essence("x")
-      let specPool = ess1.specificationPool
-      _.bassert(1,specPool.length() == 0, "no genes in specification pool")
-
-    }
-    function getterEssencesTest() {
-      let un
-      let ess0 = new Essence(un)
-      _.bassert(1,ess0.ROOT===undefined,"Should not be defined after construction")
-      _.bassert(2,ess0.RENDER===undefined,"Should not be defined after construction")
-      _.bassert(3,ess0.IGNORE===undefined,"Should not be defined after construction")
-      _.bassert(4,ess0.ONCE===undefined,"Should not be defined after construction")
-      _.bassert(5,ess0.FLAT===undefined,"Should not be defined after construction")
-      _.bassert(6,ess0.LOCAL===undefined,"Should not be defined after construction")
-      _.bassert(7,ess0.REPEAT===undefined,"Should not be defined after construction")
-      _.bassert(8,ess0.TYPE===undefined,"Should not be defined after construction")
-      _.bassert(9,ess0.DEFAULT===undefined,"Should not be defined after construction")
-      _.bassert(10,ess0.VALUE===undefined,"Should not be defined after construction")
-      _.bassert(11,areEqual(ess0.DEFAULTSundefined),"Should not be defined after construction")
-      _.bassert(12,ess0.PARSE===undefined,"Should not be defined after construction")
-      _.bassert(13,ess0.INTERNAL===undefined,"Should not be defined after construction")
-      ess0.parse(un,un,"Essence.getterEssencesTest21")
-      _.bassert(21,ess0.ROOT===true,"Should always be defined")
-      _.bassert(22,ess0.RENDER===undefined,"RENDER is used as trivalent")
-      _.bassert(23,ess0.IGNORE===false,"Should always be defined")
-      _.bassert(24,ess0.ONCE===false,"Should always be defined")
-      _.bassert(25,ess0.FLAT===false,"Should always be defined")
-      _.bassert(26,ess0.LOCAL===false,"Should always be defined")
-      _.bassert(27,ess0.REPEAT===false,"Should always be defined")
-      _.bassert(28,ess0.TYPE==="String","Should always be defined")
-      _.bassert(29,ess0.DEFAULT==="","Should always be defined")
-      _.bassert(30,ess0.VALUE==="","Should always be defined")
-      _.bassert(32,ess0.PARSE===true,"Should always be defined")
-      _.bassert(33,ess0.INTERNAL===false,"Should always be defined")
-      let lit1 = {__SPEC: {RENDER:true,
-                           IGNORE:true,
-                           ONCE:true,
-                           FLAT:true,
-                           LOCAL:true,
-                           REPEAT:true,
-                           TYPE:"Boolean",
-                           DEFAULT:false,
-                           INTERNAL:true,
-                           VALUE:false}}
-      let ess1 = new Essence("__SPEC")
-      ess1.parse(lit1,un,"Essence:getterEssencesTest1")
-      _.bassert(31,ess1.ROOT===true,"Should be set automatically")
-      _.bassert(32,ess1.RENDER===undefined,"Should stay at default value")
-      _.bassert(33,ess1.IGNORE===false,"Should stay at default value")
-      _.bassert(34,ess1.ONCE===false,"Should stay at default value")
-      _.bassert(35,ess1.FLAT===false,"Should stay at default value")
-      _.bassert(36,ess1.LOCAL===false,"Should stay at default value")
-      _.bassert(37,ess1.REPEAT===false,"Should stay at default value")
-      _.bassert(38,ess1.TYPE==="String","Should stay at default value")
-      _.bassert(39,ess1.DEFAULT==="","Should stay at default value")
-      _.bassert(40,ess1.VALUE==="","Should stay at default value")
-      _.bassert(41,ess1.INTERNAL===false,"Should stay at default value")
-      _.bassert(42,ess1.PARSE===true,"Should stay at default value")
-      let lit2 = {_S_P_E_C_: {RENDER:true,
-                           IGNORE:true,
-                           ONCE:true,
-                           FLAT:true,
-                           LOCAL:true,
-                           REPEAT:true,
-                           TYPE:"Boolean",
-                           DEFAULT:false,
-                           INTERNAL:true,
-                           VALUE:false}}
-      let ess2 = new Essence()
-      ess2.parse(lit2,un,"Essence:getterEssencesTest51")
-      _.bassert(50,ess2.SPEC_KEY == "_S_P_E_C_", "Reason that nothing works is not the SPEC key")
-      _.bassert(51,ess2.ROOT===true,"Should be set automatically")
-      _.bassert(52,ess2.RENDER===undefined,"Should stay at default value")
-      _.bassert(53,ess2.IGNORE===false,"Should stay at default value")
-      _.bassert(54,ess2.ONCE===false,"Should stay at default value")
-      _.bassert(55,ess2.FLAT===false,"Should stay at default value")
-      _.bassert(56,ess2.LOCAL===false,"Should stay at default value")
-      _.bassert(57,ess2.REPEAT===false,"Should stay at default value")
-      _.bassert(58,ess2.TYPE==="String","Should stay at default value")
-      _.bassert(59,ess2.DEFAULT==="","Should stay at default value")
-      _.bassert(60,ess2.VALUE==="","Should stay at default value")
-      _.bassert(61,ess2.INTERNAL===false,"Should stay at default value")
-      _.bassert(62,ess2.PARSE===true,"Should stay at default value")
-    }
-    function constructorTest() {
-      let un
-      _.assert(1,_tryConstruct,un,"should construct with no parameter given")
-      _.assert(2,_tryConstruct,1,"should construct with number parameter")
-      _.assert(3,_tryConstruct,"name","should construct with string parameter")
-    }
-    function parseTest() {
-      let un
-      let ess0 = new Essence()
-      ess0.parse(un,un,"Essence parseTest1")
-      _.bassert(1,ess0.ROOT===true,"Should always be defined")
-      _.bassert(2,ess0.RENDER===undefined,"RENDER is used as trivalent")
-      _.bassert(3,ess0.IGNORE===false,"Should always be defined")
-      _.bassert(4,ess0.ONCE===false,"Should always be defined")
-      _.bassert(5,ess0.FLAT===false,"Should always be defined")
-      _.bassert(6,ess0.LOCAL===false,"Should always be defined")
-      _.bassert(7,ess0.REPEAT===false,"Should always be defined")
-      _.bassert(8,ess0.TYPE==="String","Should always be defined")
-      _.bassert(9,ess0.DEFAULT==="","Should always be defined")
-      _.bassert(10,ess0.VALUE==="","Should always be defined")
-      _.bassert(12,ess0.PARSE===true,"Should always be defined")
-      _.bassert(13,ess0.INTERNAL===false,"Should always be defined")
-      let lit1 = {_S_P_E_C_: {RENDER:true,
-                           IGNORE:true,
-                           ONCE:true,
-                           FLAT:true,
-                           LOCAL:true,
-                           REPEAT:true,
-                           TYPE:"Boolean",
-                           DEFAULT:false,
-                           INTERNAL:true,
-                           VALUE:false}}
-      let ess1 = new Essence()
-      _.bassert(20,ess1.SPEC_KEY=="_S_P_E_C_","Just to assure, we have correct SPEC KEY")
-      ess1.specificationPool.addGene("String", cbkTypeOfLc)
-      ess1.specificationPool.addGene("Boolean", cbkTypeOfLc)
-
-      ess1.parse(lit1,un,"Essence:getterEssencesTest1")
-      _.bassert(21,ess1.ROOT===true,"Should always be defined")
-      _.bassert(22,ess1.RENDER===true,"Should be set to literal value")
-      _.bassert(23,ess1.IGNORE===true,"Should be set to literal value")
-      _.bassert(24,ess1.ONCE===true,"Should be set to literal value")
-      _.bassert(25,ess1.FLAT===true,"Should be set to literal value")
-      _.bassert(26,ess1.LOCAL===true,"Should be set to literal value")
-      _.bassert(27,ess1.REPEAT===true,"Should be set to literal value")
-      _.bassert(28,ess1.TYPE==="Boolean","Should be set to literal value")
-      _.bassert(29,ess1.DEFAULT===false,"Should be set to literal value")
-      _.bassert(30,ess1.VALUE===false,"Should be set to literal value")
-      _.bassert(31,ess1.INTERNAL===true,"Should be set to literal value")
-      _.bassert(32,ess1.PARSE===true,"Should stay at default value")
-
-      _.shouldAssert(40,_tryParse,ess1,{}, new Error(),un,"Error no allowed parent")
-      _.shouldAssert(41,_tryParse,ess1,"string", un,un,"String no allowed literal")
-    }
-    function isATest() {
-      let un
-      let ess1 = new Essence(un)
-      let gn1 = new Gene("abc")
-      // Object, Gene, GenePool, Essence added for each Essence instance
-      _.bassert(1,ess1.isA(ess1,Essence),"Essence should be Essence")
-      _.bassert(3,ess1.isA(ess1,GenePool),"Essence should be GenePool")
-      _.bassert(4,ess1.isA(ess1,Object),"Essence should be Object")
-      _.bassert(5,ess1.isA(gn1,Object),"Gene should be Object")
-      _.bassert(6,ess1.isA(gn1,Gene),"Gene should be Gene")
-      _.bassert(7,!ess1.isA(ess1,Gene),"Essence should not be Gene")
-      _.bassert(8,!ess1.isA(gn1,GenePool),"Gene should not be GenePool")
-
-      _.bassert(11,!ess1.isA(new Error(),Error),"should return false for Error, as not in pool")
-      _.bassert(12,!ess1.isA("String",String),"should return false for string, as not in pool")
-      _.bassert(13,!ess1.isA("String","String"),"should return false for string, as not in pool")
-      _.bassert(14,!ess1.isA("String","string"),"should return false for string, as not in pool")
-      _.bassert(15,!ess1.isA("String",Object),"should return false as string is not an Object")
-    }
-    function doParseTest() {
-      let lit1 = {a:"b"}
-      let lit2 = {a:"b",__SPEC:{}}
-      let lit3 = {a:"b",__SPEC:{anything:"something"}}
-      let lit4 = {a:"b",__SPEC:{anything:"something",PARSE:true}}
-      let lit5 = {a:"b",__SPEC:{anything:"something",PARSE:false}}
-      let answ1 = Essence.doParse(lit1)
-      let answ2 = Essence.doParse(lit2)
-      let answ3 = Essence.doParse(lit3)
-      let answ4 = Essence.doParse(lit4)
-      let answ5 = Essence.doParse(lit5)
-      _.bassert(1,answ1 === true, "PARSE is not set")
-      _.bassert(2,answ2 === true, "PARSE is not set")
-      _.bassert(3,answ3 === true, "PARSE is not set")
-      _.bassert(4,answ4 === true, "PARSE is set to true")
-      _.bassert(5,answ5 === false, "PARSE is set to false")
-    }
-    function getEssencesTest(){
-      let un
-      let lit1 = {__SPEC: {RENDER:true,
-                           IGNORE:true,
-                           ONCE:true,
-                           FLAT:true,
-                           LOCAL:true,
-                           REPEAT:true,
-                           TYPE:"Number",
-                           DEFAULT:126,
-                           VALUE:127 }}
-      _.bassert(0,lit1.__SPEC !== undefined, "__SPEC properties not removed")
-      _.bassert(1,Essence.getROOT(lit1) === undefined, "Hidden properties not added")
-      _.bassert(2,Essence.getRENDER(lit1) === undefined, "Hidden properties not added")
-      _.bassert(3,Essence.getIGNORE(lit1) === undefined, "Hidden properties not added")
-      _.bassert(4,Essence.getONCE(lit1) === undefined, "Hidden properties not added")
-      _.bassert(5,Essence.getFLAT(lit1) === undefined, "Hidden properties not added")
-      _.bassert(6,Essence.getLOCAL(lit1) === undefined, "Hidden properties not added")
-      _.bassert(7,Essence.getREPEAT(lit1) === undefined, "Hidden properties not added")
-      _.bassert(8,Essence.getTYPE(lit1) === undefined, "Hidden properties not added")
-      _.bassert(9,Essence.getDEFAULT(lit1) === undefined, "Hidden properties not added")
-      _.bassert(10,Essence.getVALUE(lit1) === undefined, "Hidden properties not added")
-      _.bassert(11,Essence.getINTERNAL(lit1) === undefined, "Hidden properties not added")
-      _.bassert(12,Essence.getPARSE(lit1) === undefined, "Hidden properties not added")
-      let ess1 = new Essence("__SPEC")
-      ess1.specificationPool.addGene("String", cbkTypeOfLc)
-      ess1.specificationPool.addGene("Boolean", cbkTypeOfLc)
-      ess1.specificationPool.addGene("Number", cbkTypeOfLc)
-      ess1.parse(lit1,un,"Essence:getEssencesTest20")
-      _.bassert(20,lit1.__SPEC === undefined, "__SPEC properties removed")
-      _.bassert(21,Essence.getROOT(lit1) === true, "Hidden properties added")
-      _.bassert(22,Essence.getRENDER(lit1) === true, "Hidden properties added")
-      _.bassert(23,Essence.getIGNORE(lit1) === true, "Hidden properties added")
-      _.bassert(24,Essence.getONCE(lit1) === true, "Hidden properties added")
-      _.bassert(25,Essence.getFLAT(lit1) === true, "Hidden properties added")
-      _.bassert(26,Essence.getLOCAL(lit1) === true, "Hidden properties added")
-      _.bassert(27,Essence.getREPEAT(lit1) === true, "Hidden properties added")
-      _.bassert(28,Essence.getTYPE(lit1) === "Number", "Hidden properties added")
-      _.bassert(29,Essence.getDEFAULT(lit1) === 126, "Hidden properties added")
-      _.bassert(30,Essence.getVALUE(lit1) === 127, "Hidden properties added")
-      _.bassert(31,Essence.getINTERNAL(lit1) === false, "Hidden properties added")
-      _.bassert(32,Essence.getPARSE(lit1) === true, "Hidden properties added")
-      _.bassert(32,Object.keys(lit1).length === 0,"Hidden properties are not enumerable")
-      let lit2 = {__SPEC: {RENDER:true,
-        IGNORE:true,
-        ONCE:true,
-        FLAT:true,
-        LOCAL:true,
-        REPEAT:true,
-        TYPE:"Boolean",
-        DEFAULT:"No Boolean",
-        INTERNAL:true,
-        PARSE:false,
-        VALUE:"No Boolean"}}
-        let ess2 = new Essence("__SPEC")
-        ess2.specificationPool.addGene("String", cbkTypeOfLc)
-        ess2.specificationPool.addGene("Boolean", cbkTypeOfLc)
-        ess2.specificationPool.addGene("Number", cbkTypeOfLc)
-        ess2.parse(lit2,un,"Essence:getEssencesTest40")
-      _.bassert(40,typeof lit2.__SPEC === "object", "__SPEC not changed")
-      _.bassert(41,Essence.getROOT(lit2) === undefined, "Hidden properties not added")
-      _.bassert(42,Essence.getRENDER(lit2) === undefined, "Hidden properties not added")
-      _.bassert(43,Essence.getIGNORE(lit2) === undefined, "Hidden properties not added")
-      _.bassert(44,Essence.getONCE(lit2) === undefined, "Hidden properties not added")
-      _.bassert(45,Essence.getFLAT(lit2) === undefined, "Hidden properties not added")
-      _.bassert(46,Essence.getLOCAL(lit2) === undefined, "Hidden properties not added")
-      _.bassert(47,Essence.getREPEAT(lit2) === undefined, "Hidden properties not added")
-      _.bassert(48,Essence.getTYPE(lit2) === undefined, "Hidden properties not added")
-      _.bassert(49,Essence.getDEFAULT(lit2) === undefined, "Hidden properties not added")
-      _.bassert(50,Essence.getVALUE(lit2) === undefined, "Hidden properties not added")
-      _.bassert(51,Essence.getINTERNAL(lit2) === undefined, "Hidden properties not added")
-      _.bassert(52,Essence.getPARSE(lit2) === undefined, "Hidden properties not added")
-      _.bassert(54,Object.keys(lit2["__SPEC"]).length === 11,"SPEC not changed")
-      _.bassert(55,lit2["__SPEC"]["RENDER"] === true,"SPEC not changed")
-      _.bassert(56,lit2["__SPEC"]["IGNORE"] === true,"SPEC not changed")
-      _.bassert(57,lit2["__SPEC"]["ONCE"] === true,"SPEC not changed")
-      _.bassert(58,lit2["__SPEC"]["FLAT"] === true,"SPEC not changed")
-      _.bassert(59,lit2["__SPEC"]["LOCAL"] === true,"SPEC not changed")
-      _.bassert(60,lit2["__SPEC"]["REPEAT"] === true,"SPEC not changed")
-      _.bassert(61,lit2["__SPEC"]["TYPE"] === "Boolean","SPEC not changed")
-      _.bassert(62,lit2["__SPEC"]["DEFAULT"] === "No Boolean","SPEC not changed")
-      _.bassert(63,lit2["__SPEC"]["INTERNAL"] === true,"SPEC not changed")
-      _.bassert(64,lit2["__SPEC"]["PARSE"] === false,"SPEC not changed")
-      _.bassert(65,lit2["__SPEC"]["VALUE"] === "No Boolean","SPEC not changed")
-    }
-    function _tryConstruct(arg1) {
-      new Essence(arg1)
-    }
-    function _tryParse(me,arg1,arg2,arg3) {
-      me.parse(arg1,arg2,arg3)
-    }
-  }
-}
-registeredTests.push(Essence.test)
-registeredExceptions.push(
-  "new Essence().parse({}, new Error())",
-  "new Essence().parse('thisIsNotAnObject')"
-)
-
-//#endregion Gene, Pool and Essence
-//#region central code classes
-class AEssence extends Essence {
-  static #SPEC_KEY = GLOBAL__SPEC // "__SPEC"
-  /** SPEC key
-   * @type {String}
-   */
-  static get SPEC_KEY() {
-    return AEssence.#SPEC_KEY
-  }
-
-  /**
-   * @classdesc
-   * First superclass in tree, which is foty specific.
-   *
-   * @mermaid
-   *  classDiagram
-   *      GenePool <|-- Essence
-   *      Essence <|-- AEssence
-   * @extends Essence
-   * @constructor
-   * @description
-   * Creates foty tokens.
-   *
-   * Adds self to its pool with {@link GeneCallback|default callback}}.
-   * Adds {@link String}, {@link Number}, {@link Boolean},
-   * {@link Function} and {@link Object} with
-   * {@link GeneCallback|callback} {@link cbkTypeOfLc}
-   * and {@link Date} with {@link GeneCallback|callback} {@link cbkIsDate}.
-   *
-   * Sets {@link Essence#SPEC_KEY|supers SPEC_KEY} to {@link AEssence.SPEC_KEY}
-   * and calls {@link Essence#parse|supers parse}, which creates the tokens.
-   * @param {(Undefined|Object)} literal
-   * @param {(Undefined|GenePool)} parent
-   * @param {(Undefined|String)} name - for checking tests
-   * @throws TypeError
-   */
-  constructor(literal, parent, name) {
-    super(AEssence.#SPEC_KEY)
-    if (parent != undefined && !this.isA(parent, GenePool))
-      throw new TypeError(
-        `function 'AEssence.constructor'${NL}2nd parameter '${parent}' is not of type 'GenePool'`
-      )
-    if (literal != undefined && typeof literal != "object")
-      throw new TypeError(
-        `function 'AEssence.constructor'${NL}1st parameter '${literal}' is not of type 'Object'`
-      )
-
-    this.addGene(AEssence)
-    this.specificationPool.addGene("String", cbkTypeOfLc)
-    this.specificationPool.addGene("Number", cbkTypeOfLc)
-    this.specificationPool.addGene("Boolean", cbkTypeOfLc)
-    this.specificationPool.addGene("Function", cbkTypeOfLc)
-    this.specificationPool.addGene("Object", cbkTypeOfLc)
-    this.specificationPool.addGene("Date", cbkIsDate)
-    this.parse(
-      literal,
-      parent,
-      typeof name == "symbol" ? "_Symbol_" + GLOBAL_SYMBOL_COUNTER++ : name
-    )
-    }
-
-  //prettier-ignore
-  static test(outputObj) {
-    let _ = null
-    if(_ = new TestSuite("AEssence", outputObj)) {
-      _.run(getterEssencesTest)
-      _.run(constructorTest)
-      _.run(isATest)
-      _.run(getEssencesTest)
-      _.destruct()
-      _ = null
-    }
-    function constructorTest() {
-      let un
-      _.assert(1,_tryConstruct1,{__SPEC: {RENDER:true}},"Should construct")
-      _.assert(2,_tryConstruct1,{__SPEC: {IGNORE:true}},"Should construct")
-      _.assert(3,_tryConstruct1,{__SPEC: {ONCE:true}},"Should construct")
-      _.assert(4,_tryConstruct1,{__SPEC: {FLAT:true}},"Should construct")
-      _.assert(5,_tryConstruct1,{__SPEC: {LOCAL:true}},"Should construct")
-      _.assert(6,_tryConstruct1,{__SPEC: {REPEAT:true}},"Should construct")
-      _.assert(7,_tryConstruct1,{__SPEC: {TYPE:"Boolean"}},"Should construct")
-      _.assert(8,_tryConstruct1,{__SPEC: {DEFAULT:""}},"Should construct")
-      _.assert(9,_tryConstruct1,{__SPEC: {VALUE:""}},"Should construct")
-      _.assert(10,_tryConstruct1,{__SPEC: {NO_SPEC_KEY:""}},"Should construct")
-      _.assert(11,_tryConstruct1,{__SPEC: {RENDER:"abc"}},"Should construct")
-      _.assert(12,_tryConstruct1,{__SPEC: {IGNORE:"abc"}},"Should construct")
-      _.assert(13,_tryConstruct1,{__SPEC: {ONCE:"abc"}},"Should construct")
-      _.assert(14,_tryConstruct1,{__SPEC: {FLAT:"abc"}},"Should construct")
-      _.assert(15,_tryConstruct1,{__SPEC: {LOCAL:"abc"}},"Should construct")
-      _.assert(16,_tryConstruct1,{__SPEC: {REPEAT:"abc"}},"Should construct")
-      _.assert(17,_tryConstruct1,{__SPEC: {TYPE:false}},"Should construct")
-      _.assert(18,_tryConstruct1,{__SPEC: {DEFAULT:false}},"Should construct")
-      _.assert(19,_tryConstruct1,{__SPEC: {VALUE:false}},"Should construct")
-      let wrong1 = new AEssence({__SPEC: {RENDER:"abc"}},un,"AEssence:constructorTestWrong1")
-      let wrong2 = new AEssence({__SPEC: {IGNORE:"abc"}},un,"AEssence:constructorTestWrong2")
-      let wrong3 = new AEssence({__SPEC: {ONCE:"abc"}},un,"AEssence:constructorTestWrong3")
-      let wrong4 = new AEssence({__SPEC: {FLAT:"abc"}},un,"AEssence:constructorTestWrong4")
-      let wrong5 = new AEssence({__SPEC: {LOCAL:"abc"}},un,"AEssence:constructorTestWrong5")
-      let wrong6 = new AEssence({__SPEC: {REPEAT:"abc"}},un,"AEssence:constructorTestWrong6")
-      let wrong7 = new AEssence({__SPEC: {TYPE:false}},un,"AEssence:constructorTestWrong7")
-      let wrong8 = new AEssence({__SPEC: {DEFAULT:false}},un,"AEssence:constructorTestWrong8")
-      let wrong9 = new AEssence({__SPEC: {VALUE:false}},un,"AEssence:constructorTestWrong9")
-      let wrong10 = new AEssence({__SPEC: {NO_SPEC_KEY:false}},un,"AEssence:constructorTestWrong10")
-      _.bassert(21,wrong1.skipped[0]["name"]==="RENDER","RENDER should be skipped")
-      _.bassert(22,wrong2.skipped[0]["name"]==="IGNORE","IGNORE should be skipped")
-      _.bassert(23,wrong3.skipped[0]["name"]==="ONCE","ONCE should be skipped")
-      _.bassert(24,wrong4.skipped[0]["name"]==="FLAT","FLAT should be skipped")
-      _.bassert(25,wrong5.skipped[0]["name"]==="LOCAL","LOCAL should be skipped")
-      _.bassert(26,wrong6.skipped[0]["name"]==="REPEAT","REPEAT should be skipped")
-      _.bassert(27,wrong7.skipped[0]["name"]==="TYPE","TYPE should be skipped")
-      _.bassert(28,wrong8.skipped[0]["name"]==="DEFAULT","DEFAULT should be skipped")
-      _.bassert(29,wrong9.skipped[0]["name"]==="VALUE","VALUE should be skipped")
-      _.bassert(30,wrong10.skipped.length ===0,"unknown SPEC entries should be skipped silently")
-      let lit = {__SPEC: {RENDER:true},myValue:"22"}
-      _.bassert(31,lit.__SPEC != undefined,"just to show it is defined")
-      _.bassert(32,lit.myValue != undefined,"just to show it is defined")
-      let ess1 = new AEssence(lit,un,"AEssence:ConstructorTestEss1")
-      _.bassert(33,lit.__SPEC === undefined,"SPEC should no longer be defined")
-      _.bassert(34,lit.myValue != undefined,"just to show it is still defined")
-
-      _.shouldAssert(41,_tryConstruct3,{__SPEC: {RENDER:true}},new Error(),"Should not be constructed")
-      _.assert(42,_tryConstruct3,{__SPEC: {RENDER:true}},ess1,"Should be constructed")
-    }
-    function getterEssencesTest() {
-      let un
-      let ess0 = new AEssence(un,un,"AEssence:getterEssencesTest0")
-      _.bassert(1,ess0.ROOT===true,"Should always be defined")
-      _.bassert(2,ess0.RENDER===undefined,"RENDER is used as trivalent")
-      _.bassert(3,ess0.IGNORE===false,"Should always be defined")
-      _.bassert(4,ess0.ONCE===false,"Should always be defined")
-      _.bassert(5,ess0.FLAT===false,"Should always be defined")
-      _.bassert(6,ess0.LOCAL===false,"Should always be defined")
-      _.bassert(7,ess0.REPEAT===false,"Should always be defined")
-      _.bassert(8,ess0.TYPE==="String","Should always be defined")
-      _.bassert(9,ess0.DEFAULT==="","Should always be defined")
-      _.bassert(10,ess0.VALUE==="","Should always be defined")
-      _.bassert(12,ess0.PARSE===true,"Should always be defined")
-      _.bassert(13,ess0.INTERNAL===false,"Should always be defined")
-      let lit1 = {__SPEC: {RENDER:true,
-                           IGNORE:true,
-                           ONCE:true,
-                           FLAT:true,
-                           LOCAL:true,
-                           REPEAT:true,
-                           TYPE:"Boolean",
-                           DEFAULT:false,
-                           INTERNAL:true,
-                           VALUE:false}}
-      let ess1 = new AEssence(lit1,un,"AEssence:getterEssencesTest1")
-      _.bassert(21,ess1.ROOT===true,"Should always be defined")
-      _.bassert(22,ess1.RENDER===true,"Should be set to literal value")
-      _.bassert(23,ess1.IGNORE===true,"Should be set to literal value")
-      _.bassert(24,ess1.ONCE===true,"Should be set to literal value")
-      _.bassert(25,ess1.FLAT===true,"Should be set to literal value")
-      _.bassert(26,ess1.LOCAL===true,"Should be set to literal value")
-      _.bassert(27,ess1.REPEAT===true,"Should be set to literal value")
-      _.bassert(28,ess1.TYPE==="Boolean","Should be set to literal value")
-      _.bassert(29,ess1.DEFAULT===false,"Should be set to literal value")
-      _.bassert(30,ess1.VALUE===false,"Should be set to literal value")
-      _.bassert(31,ess1.INTERNAL===true,"Should be set to literal value")
-      _.bassert(32,ess1.PARSE===true,"Should stay at default value")
-      let ess2 = new AEssence(undefined,ess1,"AEssence:getterEssencesTest2")
-      _.bassert(41,ess2.ROOT===false,"Should always be defined")
-      _.bassert(42,ess2.RENDER===true,"Should be set to parent value")
-      _.bassert(43,ess2.IGNORE===true,"Should be set to parent value")
-      _.bassert(44,ess2.ONCE===false,"Should be set to default value")
-      _.bassert(45,ess2.FLAT===false,"Should be set to default value")
-      _.bassert(46,ess2.LOCAL===true,"Should be set to parent value")
-      _.bassert(47,ess2.REPEAT===false,"Should be set to default value")
-      _.bassert(48,ess2.TYPE==="Boolean","Should be set to parent value")
-      _.bassert(49,ess2.DEFAULT==="","Should be set to default value")
-      _.bassert(50,ess2.VALUE==="","Should be set to default value")
-      _.bassert(51,ess2.INTERNAL===true,"Should be set to inherited value")
-      _.bassert(52,ess1.PARSE===true,"Should stay at default value")
-      let lit3 = {__SPEC: {RENDER:true,
-        IGNORE:true,
-        ONCE:true,
-        FLAT:true,
-        LOCAL:true,
-        REPEAT:true,
-        TYPE:"Boolean",
-        DEFAULT:false,
-        INTERNAL:true,
-        PARSE:false,
-        VALUE:false}}
-      let ess3 = new AEssence(lit3,un,"AEssence:getterEssencesTest3")
-      _.bassert(61,ess3.ROOT===undefined,"No Essences should be added")
-      _.bassert(62,ess3.RENDER===undefined,"No Essences should be added")
-      _.bassert(63,ess3.IGNORE===undefined,"No Essences should be added")
-      _.bassert(64,ess3.ONCE===undefined,"No Essences should be added")
-      _.bassert(65,ess3.FLAT===undefined,"No Essences should be added")
-      _.bassert(66,ess3.LOCAL===undefined,"No Essences should be added")
-      _.bassert(67,ess3.REPEAT===undefined,"No Essences should be added")
-      _.bassert(68,ess3.TYPE===undefined,"No Essences should be added")
-      _.bassert(69,ess3.DEFAULT===undefined,"No Essences should be added")
-      _.bassert(70,ess3.VALUE===undefined,"No Essences should be added")
-      _.bassert(71,ess3.INTERNAL===undefined,"No Essences should be added")
-      _.bassert(72,ess3.PARSE===undefined,"No Essences should be added")
-    }
-    function isATest() {
-      let un
-      let ess1 = new AEssence(un,un,"AEssence:isATest1")
-      let gn1 = new Gene("abc")
-      // Object, Gene, GenePool, AEssence added for each AEssence instance
-      _.bassert(1,ess1.isA(ess1,AEssence),"AEssence should be AEssence")
-      _.bassert(2,ess1.isA(ess1,Essence),"AEssence should be Essence")
-      _.bassert(3,ess1.isA(ess1,GenePool),"AEssence should be GenePool")
-      _.bassert(4,ess1.isA(ess1,Object),"AEssence should be Object")
-      _.bassert(5,ess1.isA(gn1,Object),"Gene should be Object")
-      _.bassert(6,ess1.isA(gn1,Gene),"Gene should be Gene")
-      _.bassert(7,!ess1.isA(ess1,Gene),"AEssence should not be Gene")
-      _.bassert(8,!ess1.isA(gn1,GenePool),"Gene should not be GenePool")
-      _.bassert(9,!ess1.isA(gn1,AEssence),"Gene should not be AEssence")
-
-      _.bassert(11,!ess1.isA(new Error(),Error),"should return false for Error, as not in pool")
-      _.bassert(12,!ess1.isA("String",String),"should return false for string, as not in pool")
-      _.bassert(13,!ess1.isA("String","String"),"should return false for string, as not in pool")
-      _.bassert(14,!ess1.isA("String","string"),"should return false for string, as not in pool")
-      _.bassert(15,!ess1.isA("String",Object),"should return false as string is not an Object")
-    }
-    function getEssencesTest() {
-      let un
-      let lit1 = {__SPEC: {RENDER:true,
-                           IGNORE:true,
-                           ONCE:true,
-                           FLAT:true,
-                           LOCAL:true,
-                           REPEAT:true,
-                           TYPE:"Number",
-                           DEFAULT:126,
-                           VALUE:127 }}
-      _.bassert(0,lit1.__SPEC !== undefined, "__SPEC properties not removed")
-      _.bassert(1,AEssence.getROOT(lit1) === undefined, "Hidden properties not added")
-      _.bassert(2,AEssence.getRENDER(lit1) === undefined, "Hidden properties not added")
-      _.bassert(3,AEssence.getIGNORE(lit1) === undefined, "Hidden properties not added")
-      _.bassert(4,AEssence.getONCE(lit1) === undefined, "Hidden properties not added")
-      _.bassert(5,AEssence.getFLAT(lit1) === undefined, "Hidden properties not added")
-      _.bassert(6,AEssence.getLOCAL(lit1) === undefined, "Hidden properties not added")
-      _.bassert(7,AEssence.getREPEAT(lit1) === undefined, "Hidden properties not added")
-      _.bassert(8,AEssence.getTYPE(lit1) === undefined, "Hidden properties not added")
-      _.bassert(9,AEssence.getDEFAULT(lit1) === undefined, "Hidden properties not added")
-      _.bassert(10,AEssence.getVALUE(lit1) === undefined, "Hidden properties not added")
-      _.bassert(11,AEssence.getINTERNAL(lit1) === undefined, "Hidden properties not added")
-      _.bassert(12,AEssence.getPARSE(lit1) === undefined, "Hidden properties not added")
-      new AEssence(lit1,un,"AEssence:getEssencesTest")
-      _.bassert(20,lit1.__SPEC === undefined, "__SPEC properties removed")
-      _.bassert(21,AEssence.getROOT(lit1) === true, "Hidden properties added")
-      _.bassert(22,AEssence.getRENDER(lit1) === true, "Hidden properties added")
-      _.bassert(23,AEssence.getIGNORE(lit1) === true, "Hidden properties added")
-      _.bassert(24,AEssence.getONCE(lit1) === true, "Hidden properties added")
-      _.bassert(25,AEssence.getFLAT(lit1) === true, "Hidden properties added")
-      _.bassert(26,AEssence.getLOCAL(lit1) === true, "Hidden properties added")
-      _.bassert(27,AEssence.getREPEAT(lit1) === true, "Hidden properties added")
-      _.bassert(28,AEssence.getTYPE(lit1) === "Number", "Hidden properties added")
-      _.bassert(29,AEssence.getDEFAULT(lit1) === 126, "Hidden properties added")
-      _.bassert(30,AEssence.getVALUE(lit1) === 127, "Hidden properties added")
-      _.bassert(31,AEssence.getINTERNAL(lit1) === false, "Hidden properties added")
-      _.bassert(32,AEssence.getPARSE(lit1) === true, "Hidden properties added")
-      _.bassert(32,Object.keys(lit1).length === 0,"Hidden properties are not enumerable")
-      let lit2 = {__SPEC: {RENDER:true,
-        IGNORE:true,
-        ONCE:true,
-        FLAT:true,
-        LOCAL:true,
-        REPEAT:true,
-        TYPE:"Boolean",
-        DEFAULT:"No Boolean",
-        INTERNAL:true,
-        PARSE:false,
-        VALUE:"No Boolean"}}
-      new AEssence(lit2,un,"AEssence:getEssencesTest")
-      _.bassert(40,typeof lit2.__SPEC === "object", "__SPEC not changed")
-      _.bassert(41,AEssence.getROOT(lit2) === undefined, "Hidden properties not added")
-      _.bassert(42,AEssence.getRENDER(lit2) === undefined, "Hidden properties not added")
-      _.bassert(43,AEssence.getIGNORE(lit2) === undefined, "Hidden properties not added")
-      _.bassert(44,AEssence.getONCE(lit2) === undefined, "Hidden properties not added")
-      _.bassert(45,AEssence.getFLAT(lit2) === undefined, "Hidden properties not added")
-      _.bassert(46,AEssence.getLOCAL(lit2) === undefined, "Hidden properties not added")
-      _.bassert(47,AEssence.getREPEAT(lit2) === undefined, "Hidden properties not added")
-      _.bassert(48,AEssence.getTYPE(lit2) === undefined, "Hidden properties not added")
-      _.bassert(49,AEssence.getDEFAULT(lit2) === undefined, "Hidden properties not added")
-      _.bassert(50,AEssence.getVALUE(lit2) === undefined, "Hidden properties not added")
-      _.bassert(51,AEssence.getINTERNAL(lit2) === undefined, "Hidden properties not added")
-      _.bassert(52,AEssence.getPARSE(lit2) === undefined, "Hidden properties not added")
-      _.bassert(54,Object.keys(lit2["__SPEC"]).length === 11,"SPEC not changed")
-      _.bassert(55,lit2["__SPEC"]["RENDER"] === true,"SPEC not changed")
-      _.bassert(56,lit2["__SPEC"]["IGNORE"] === true,"SPEC not changed")
-      _.bassert(57,lit2["__SPEC"]["ONCE"] === true,"SPEC not changed")
-      _.bassert(58,lit2["__SPEC"]["FLAT"] === true,"SPEC not changed")
-      _.bassert(59,lit2["__SPEC"]["LOCAL"] === true,"SPEC not changed")
-      _.bassert(60,lit2["__SPEC"]["REPEAT"] === true,"SPEC not changed")
-      _.bassert(61,lit2["__SPEC"]["TYPE"] === "Boolean","SPEC not changed")
-      _.bassert(62,lit2["__SPEC"]["DEFAULT"] === "No Boolean","SPEC not changed")
-      _.bassert(63,lit2["__SPEC"]["INTERNAL"] === true,"SPEC not changed")
-      _.bassert(64,lit2["__SPEC"]["PARSE"] === false,"SPEC not changed")
-      _.bassert(65,lit2["__SPEC"]["VALUE"] === "No Boolean","SPEC not changed")
-    }
-    function _tryConstruct1(arg1) {
-      new AEssence(arg1)
-    }
-    function _tryConstruct3(arg1, arg2, arg3) {
-      if(arg3 == undefined) arg3 = "EssenceTest"
-      new AEssence(arg1, arg2, arg3)
-    }
-  }
-}
-registeredTests.push(AEssence.test)
-registeredExceptions.push(
-  "new AEssence({}, new Error())",
-  "new AEssence('thisIsNotAnObject')"
-)
-
-class BreadCrumbs extends AEssence {
-  static sep = GLOBAL_BREADCRUMBS_SEPARATOR // " \u00BB "
-  #name
-  #parent
-  #literal
-  /**
-   *
-   * Returns literal given in BreadCrumbs constructor, __SPEC property removed.
-   * @returns {Object}
-   */
-  get literal() {
-    return this.#literal
-  }
-  /**
-   * Returns parent given in BreadCrumbs constructor
-   * @type (Undefined|BreadCrumbs)
-   */
-  get parent() {
-    return this.#parent
-  }
-  /**
-   * Returns key given in BreadCrumbs constructor
-   * @type {String}
-   */
-  get name() {
-    return this.#name
-  }
-  /**
-   * Returns root of the BreadCrumbs tree
-   * @type {BreadCrumbs}
-   */
-  get root() {
-    return this.ROOT ? this : this.parent.root
-  }
-
-  /**
-   * @classdesc
-   * Parsing tree superclass.
-   * @mermaid
-   *  classDiagram
-   *      GenePool <|-- Essence
-   *      Essence <|-- AEssence
-   *      AEssence <|-- Breadcrumbs
-   * @extends AEssence
-   * @constructor
-   * @description
-   * Creates new BreadCrumbs instance.
-   *
-   * Adds {@link BreadCrumbs}
-   * to its pool as Gene with {@link GeneCallback|callback} {@link cbkInstanceOf}.<br>
-   * Adds <code>undefined</code>, <code>boolean</code>, <code>number</code>,
-   * <code>bigint</code>, <code>string</code>, <code>symbol</code>
-   * and <code>function</code> to this pool with
-   * {@link GeneCallback|callback} {@link cbkTypeOf}.<br>
-   * Adds <code>date</code> to this pool with
-   * {@link GeneCallback|callback} {@link cbkIsDate}.<br>
-   * Adds <code>object</code> with {@link GeneCallback|callback} {@link cbkIsObjectNotNullNotArray},
-   * <code>null</code> with {@link GeneCallback|callback} {@link cbkIsNull}
-   * and <code>array</code> with {@link GeneCallback|callback} {@link cbkIsArray}
-   * to this pool.
-   * @param {(Undefined|Object)} literal
-   * @param {(String|Symbol)} name
-   * @param {(Undefined|BreadCrumbs)} parent
-   */
-  constructor(literal, name, parent) {
-    super(
-      literal,
-      parent,
-      typeof name == "symbol" ? "_Symbol_" + GLOBAL_SYMBOL_COUNTER++ : name
-    )
-    this.addGene(BreadCrumbs)
-    this.addGene("undefined", cbkTypeOf)
-    this.addGene("null", cbkIsNull)
-    this.addGene("boolean", cbkTypeOf)
-    this.addGene("number", cbkTypeOf)
-    this.addGene("bigint", cbkTypeOf)
-    this.addGene("string", cbkTypeOf)
-    this.addGene("symbol", cbkTypeOf)
-    this.addGene("function", cbkTypeOf)
-    this.addGene("date", cbkIsDate)
-    this.addGene("object", cbkIsObjectNotNullNotArray)
-    this.addGene("array", cbkIsArray)
-    if (!this.isA(parent, "undefined"))
-      this.throwIfNotOfType(parent, "parent", BreadCrumbs)
-    this.#parent = parent
-    this.throwIfUndefined(name, "name")
-    this.throwIfNotOfType(name, "name", "(string|symbol)")
-    if (typeof name === "symbol")
-      this.#name = "_Symbol_" + GLOBAL_SYMBOL_COUNTER++
-    else
-      this.#name = name
-    if (!this.isA(literal, "undefined"))
-      this.throwIfNotOfType(literal, "literal", "object")
-    this.#literal = literal
-    if (this.skipped.length) {
-      //prettier-ignore
-      let str = `Breadcrumbs: ${this.toBreadcrumbs()}
-Not all specification values had been correct. Wrong values
-are skipped and parents setting or hardcoded default is used.
-Skipped values are: `
-      this.skipped.forEach((skip) => {
-        str += "\nName: " + skip.name
-        str += ", value: " + skip.value
-        str += ", expected type: " + skip.expectedType
-      })
-      console.log(str)
-    }
-  }
-
-  /**
-   * Returns string representing class instance for BreadCrumbs and derived instances .
-   * @returns {String} string containing class name of deepest subclass and key
-   *          as given in BreadCrumbs constructor.
-   */
-  toDisplayString() {
-    if (typeof this.#name === "string")
-      return "°°°" + this.constructor.name + " " + this.#name
-    else if (typeof this.#name === "symbol")
-      return (
-        "°°°" +
-        this.constructor.name +
-        " " +
-        "_Symbol_" +
-        GLOBAL_SYMBOL_COUNTER++
-      )
-  }
-
-  /**
-   * Returns line of ancestors with keys given in BreadCrumbs constructor.
-   *
-   * For this instance and its ancestors keys are returned, separated by
-   * {@link BreadCrumbs.sep}.
-   * @returns {String}
-   */
-  toBreadcrumbs() {
-    let breadcrumbs = ""
-    let sep = ""
-    if (!this.isA(this.#parent, "undefined")) {
-      if (this.isA(this.#parent, BreadCrumbs))
-        breadcrumbs += this.#parent.toBreadcrumbs()
-      else breadcrumbs += "(" + this.#parent + ")"
-      sep = BreadCrumbs.sep
-    }
-    breadcrumbs += sep + this.#name
-    return breadcrumbs
-  }
-
-  /**
-   * Throws if {@link val} is strictly undefined (null is defined).
-   *
-   * Does not throw on parameter type errors.
-   * @param {*} val
-   * @param {String} vName - becomes part of Error message
-   * @param {String} fuName - becomes part of Error message
-   * @param {String} msg - becomes part of Error message
-   * @param {String} usrMsg - becomes part of Error message
-   * @throws {SettingError}
-   */
-  throwIfUndefined(
-    val,
-    vName,
-    fuName = "constructor",
-    msg = "is undefined",
-    usrMsg = ""
-  ) {
-    if (typeof vName != "string") vName = ""
-    if (typeof fuName != "string") fuName = ""
-    if (typeof msg != "string") msg = "is undefined"
-    if (typeof usrMsg != "string") usrMsg = ""
-    if (this.isA(val, "undefined"))
-      throw new SettingError(
-        `${this.constructor.name}.${fuName}`,
-        usrMsg,
-        `Path: ${this.toBreadcrumbs()}${NL}'${vName}' ${msg}`
-      )
-  }
-
-  /**
-   * Throws if val is not of type or compound type, if type is defined with string.
-   *
-   * Does not throw on parameters type errors.
-   * @param {*} val
-   * @param {String} vName
-   * @param {String} type - compound type string possible for types defined
-   *                        using strings
-   * @param {String} [fuName="constructor"] - becomes part of Error message
-   * @param {String} [msg="is not of type"] - becomes part of Error message
-   * @param {String} [usrMsg=""] - becomes part of Error message
-   * @throws {SettingError}
-   */
-  throwIfNotOfType(
-    val,
-    vName,
-    type,
-    fuName = "constructor",
-    msg = "is not of type",
-    usrMsg = ""
-  ) {
-    let typeStr = this.isA(type, Object) ? type.toString().split(" ")[1] : type
-    if (typeof vName != "string") vName = ""
-    if (typeof fuName != "string") fuName = ""
-    if (typeof msg != "string") msg = " is not of type"
-    if (typeof usrMsg != "string") usrMsg = ""
-    if (!this.isA(val, type))
-      throw new SettingError(
-        `${this.constructor.name}.${fuName}`,
-        usrMsg,
-        `Path: ${this.toBreadcrumbs()}${NL}'${vName}' '${val}' ${msg} '${typeStr}'`
-      )
-  }
-
-  //prettier-ignore
-  static test(outputObj) {
-    let _ = null
-    if(_ = new TestSuite("BreadCrumbs", outputObj)) {
-      _.run(getterLiteralTest)
-      _.run(getterParentTest)
-      _.run(getterNameTest)
-      _.run(getterRootTest)
-      _.run(constructorTest)
-      _.run(isATest)
-      _.run(toDisplayStringTest)
-      _.run(toBreadCrumbsTest)
-      _.run(throwIfUndefinedTest)
-      _.run(throwIfNotOfTypeTest)
-      _.destruct()
-      _ = null
-    }
-    function getterLiteralTest() {
-      let breadcrumbs0 = new BreadCrumbs({}, "my name1")
-      let breadcrumbs1 = new BreadCrumbs({"key1": 87673}, "my name2")
-      _.bassert(1,breadcrumbs1.literal.key1 === 87673, "does not return literal given on construction ")
-      _.bassert(2,breadcrumbs0.literal != undefined, "empty literal given should be defined")
-    }
-    function getterParentTest() {
-      let un
-      let bc0 = new BreadCrumbs(un, "GodMother")
-      let bc1 = new BreadCrumbs(un, "Granny",bc0)
-      let bc2 = new BreadCrumbs(un, "Mummy",bc1)
-      let bc3 = new BreadCrumbs(un, "Youngster",bc2)
-      _.bassert(0,undefined == bc0.parent,"is root")
-      _.bassert(1,bc1.parent == bc0,"has bc0 as parent")
-      _.bassert(2,bc2.parent == bc1,"has bc1 as parent")
-      _.bassert(3,bc3.parent == bc2,"has bc2 as parent")
-    }
-    function getterNameTest() {
-      let un
-      let bc0 = new BreadCrumbs(un, "GodMother")
-      let bc1 = new BreadCrumbs(un, "Granny",bc0)
-      let bc2 = new BreadCrumbs(un, "Mummy",bc1)
-      let bc3 = new BreadCrumbs(un, "Youngster",bc2)
-      _.bassert(0,bc0.name == "GodMother","name is 'GodMother'")
-      _.bassert(1,bc1.name == "Granny","name is 'Granny'")
-      _.bassert(2,bc2.name == "Mummy","name is 'Mummy'")
-      _.bassert(3,bc3.name == "Youngster","name is 'Youngster'")
-      _.bassert(4,bc3.parent.name == "Mummy", "parents name is 'Mummy'")
-      _.bassert(4,bc3.parent.parent.name == "Granny", "grandparents name is 'Granny'")
-      _.bassert(4,bc3.parent.parent.parent.name == "GodMother", "first ancestors name is 'GodMother'")
-    }
-    function getterRootTest() {
-      let un
-      let bc0 = new BreadCrumbs(un, "GodMother")
-      let bc1 = new BreadCrumbs(un, "Granny",bc0)
-      let bc2 = new BreadCrumbs(un, "Mummy",bc1)
-      let bc3 = new BreadCrumbs(un, "Youngster",bc2)
-      _.bassert(1,bc0.root == bc0,"root is bc0")
-      _.bassert(2,bc1.root == bc0,"root is bc0")
-      _.bassert(3,bc2.root == bc0,"root is bc0")
-      _.bassert(4,bc3.root == bc0,"root is bc0")
-      _.bassert(5,bc3.root.parent == undefined, "root has no parent")
-      _.bassert(6,bc3.root.name == "GodMother", "roots name is 'GodMother'")
-    }
-    function constructorTest() {
-      let un
-      _.assert(1,_tryConstruct,un,"BreadCrumbs:myName1",un, "undefined for literal, string for name, undefined for parent should construct")
-      _.assert(2,_tryConstruct,{},"BreadCrumbs:myName2",un, "empty object for literal should construct")
-      _.shouldAssert(3,_tryConstruct,2,"BreadCrumbs:myName3",un, "number for literal should not construct")
-      _.shouldAssert(4,_tryConstruct,null,"BreadCrumbs:myName4",un, "null for literal should not construct")
-      _.assert(5,_tryConstruct,new Error(),"BreadCrumbs:myName5",un, "any class for literal should construct")
-      _.shouldAssert(6,_tryConstruct,["a","b"],"BreadCrumbs:myName6",un, "array for literal should not construct")
-      _.shouldAssert(7,_tryConstruct,Symbol(),"BreadCrumbs:myName7",un, "symbol for literal should not construct")
-
-      _.assert(8,_tryConstruct,un,Symbol(),un, "symbol for key should construct")
-      _.shouldAssert(9,_tryConstruct,{},un,un,"key has to be defined")
-      _.shouldAssert(10,_tryConstruct,{},2,un,"key can not be a number")
-      _.shouldAssert(11,_tryConstruct,{},null,un,"key may not be 'null'")
-      _.shouldAssert(12,_tryConstruct,{},{},un,"key may not be an object")
-      _.shouldAssert(13,_tryConstruct,{},new Error(),un,"key may not be 'Error' instance")
-      _.shouldAssert(14,_tryConstruct,{},["a","b"],un,"key may not be an array")
-
-      let breadcrumbs = new BreadCrumbs(un,"myName8")
-      let parent = new BreadCrumbs({},"myName9")
-      _.assert(15,_tryConstruct,un,"BreadCrumbs:myName10",breadcrumbs,"BreadCrumbs with no literal for parent should construct")
-      _.assert(16,_tryConstruct,un,"BreadCrumbs:myName11",parent, "BreadCrumbs with literal for parent should construct")
-      _.shouldAssert(17,_tryConstruct,un,"BreadCrumbs:myName12",null,"parent may not be 'null'")
-      _.shouldAssert(18,_tryConstruct,un,"BreadCrumbs:myName13",new Error(),"parent may not be 'Error' instance")
-      _.shouldAssert(19,_tryConstruct,un,"BreadCrumbs:myName14",{},"parent may not be a plain js object")
-      _.shouldAssert(20,_tryConstruct,un,"BreadCrumbs:myName15",2,"parent may not be a number")
-      _.shouldAssert(21,_tryConstruct,un,"BreadCrumbs:myName16",["a","b"],"parent may not be an array")
-      _.shouldAssert(22,_tryConstruct,un,"BreadCrumbs:myName17",Symbol(),"parent may not be a symbol")
-
-      _.bassert(101,breadcrumbs instanceof Object,"'BreadCrumbs' has to be an instance of 'Object'")
-      _.bassert(102,breadcrumbs instanceof BreadCrumbs,"'BreadCrumbs' has to be an instance of 'BreadCrumbs'")
-      _.bassert(103,breadcrumbs.constructor === BreadCrumbs,"the constructor property is not 'BreadCrumbs'")
-    }
-    function isATest() {
-      // Object, Gene, GenePool, AEssence added for each AEssence instance
-      // BreadCrumbs added for each BreadCrumbs instance
-      // "undefined", "null", "boolean", "number", "bigint", "string", "symbol",
-      // "function", "object", "array" added for each BreadCrumbs instance
-      let un
-      let bc = new BreadCrumbs(un, "BreadCrumbs:NameIsATest")
-      _.bassert(1,bc.isA(new BreadCrumbs(un, "BreadCrumbs:NameIsATest"),BreadCrumbs),"BreadCrumbs instance should be a BreadCrumbs")
-      _.bassert(2,!bc.isA(new Error(),BreadCrumbs),"Error instance should not be a BreadCrumbs")
-      _.bassert(3,!bc.isA("BreadCrumbs",BreadCrumbs),"String should not be a BreadCrumbs")
-      _.bassert(4,!bc.isA(22,BreadCrumbs),"number should not be a BreadCrumbs")
-
-      _.bassert(11,bc.isA(un,"undefined"),"should be registered and succeed")
-      _.bassert(12,bc.isA(null,"null"),"should be registered and succeed")
-      _.bassert(13,bc.isA(false,"boolean"),"should be registered and succeed")
-      _.bassert(14,bc.isA(12,"number"),"should be registered and succeed")
-      _.bassert(15,bc.isA(12n,"bigint"),"should be registered and succeed")
-      _.bassert(16,bc.isA("good","string"),"should be registered and succeed")
-      _.bassert(17,bc.isA(Symbol(),"symbol"),"should be registered and succeed")
-      _.bassert(18,bc.isA(cbkTypeOf,"function"),"should be registered and succeed")
-      _.bassert(19,bc.isA({},"object"),"should be registered and succeed")
-      _.bassert(20,bc.isA([],"array"),"should be registered and succeed")
-      _.bassert(21,bc.isA("abc","date"),"should be registered and succeed")
-
-      _.bassert(31,!bc.isA(null,"undefined"),"should be registered and fail")
-      _.bassert(32,!bc.isA(undefined,"null"),"should be registered and fail")
-      _.bassert(33,!bc.isA(null,"boolean"),"should be registered and fail")
-      _.bassert(34,!bc.isA(12n,"number"),"should be registered and fail")
-      _.bassert(35,!bc.isA(12,"bigint"),"should be registered and fail")
-      _.bassert(36,!bc.isA(String,"string"),"should be registered and fail")
-      _.bassert(37,!bc.isA({},"symbol"),"should be registered and fail")
-      _.bassert(38,!bc.isA({},"function"),"should be registered and fail")
-      _.bassert(39,!bc.isA([],"object"),"should be registered and fail")
-      _.bassert(40,!bc.isA({},"array"),"should be registered and fail")
-      _.bassert(41,!bc.isA({},"date"),"should be registered and fail")
-      _.bassert(42,!bc.isA(null,"object"),"should be registered and fail")
-
-      _.bassert(51,bc.isA(new BreadCrumbs(un, "BreadCrumbs:NameIsATest"),BreadCrumbs),"BreadCrumbs instance should be a BreadCrumbs")
-      _.bassert(52,bc.isA(new BreadCrumbs(un, "BreadCrumbs:NameIsATest"),AEssence),"BreadCrumbs instance should be a AEssence")
-      _.bassert(53,bc.isA(new BreadCrumbs(un, "BreadCrumbs:NameIsATest"),Essence),"BreadCrumbs instance should be a Essence")
-      _.bassert(54,bc.isA(new BreadCrumbs(un, "BreadCrumbs:NameIsATest"),GenePool),"BreadCrumbs instance should be a GenePool")
-      _.bassert(55,bc.isA(new BreadCrumbs(un, "BreadCrumbs:NameIsATest"),Object),"BreadCrumbs instance should be a Object")
-
-    }
-    function toDisplayStringTest() {
-      let str = new BreadCrumbs(undefined, "BrRrEadCrumbs:my name11").toDisplayString()
-      _.bassert(1,str.includes("BrRrEadCrumbs:my name11"),"result does not contain name given on construction")
-      _.bassert(2,str.includes("BreadCrumbs"),"result does not contain class name")
-      str = new BreadCrumbs({},"BreaDCrumbs:myName20").toDisplayString()
-      _.bassert(3,str.includes("BreaDCrumbs:myName20"),"result does not contain name given on construction")
-      _.bassert(4,str.includes("BreadCrumbs"),"result does not contain class name")
-    }
-    function toBreadCrumbsTest() {
-      let sep = BreadCrumbs.sep
-      let parent = new BreadCrumbs(undefined, "BreadCrumbs:parent1")
-      let child = new BreadCrumbs(undefined, "BreadCrumbs:child1", parent)
-      let grandChild = new BreadCrumbs(undefined, "BreadCrumbs:grandChild1", child)
-      let parentStr = parent.toBreadcrumbs()
-      let childStr = child.toBreadcrumbs()
-      let grandChildStr = grandChild.toBreadcrumbs()
-      _.bassert(1,parentStr === "BreadCrumbs:parent1","breadCrumbs '" + parentStr + "' are wrong")
-      _.bassert(2,childStr === "BreadCrumbs:parent1"+ sep +"BreadCrumbs:child1","BreadCrumbs:breadCrumbs '" + childStr + "' are wrong")
-      _.bassert(3,grandChildStr === "BreadCrumbs:parent1"+sep+"BreadCrumbs:child1"+sep+"BreadCrumbs:grandChild1","breadCrumbs '" + grandChildStr + "' are wrong")
-    }
-    function throwIfUndefinedTest() {
-      let un
-      let vName
-      _.assert(1,_tryThrowIfUndefined,22,un,un,un,"should accept all types for all parameter")
-      _.shouldAssert(2, _tryThrowIfUndefined,vName, "vName", "test",un,"Should throw as 'vName' is undefined")
-      _.assert(3,_tryThrowIfUndefined,null,un,un,un,"should not throw for null")
-    }
-    function throwIfNotOfTypeTest() {
-      let un
-      let str = "String"
-      let bc = new BreadCrumbs({},"BreadCrumbs:testThrowNotOfType")
-      _.assert      (1,_tryThrowIfNotOfType,bc,22 ,"vName","number",un,un,un,"should accept all types for all parameter, besides 2nd")
-      _.shouldAssert(2,_tryThrowIfNotOfType,bc,22 ,"vName",un,un, un,un,"should throw for 22 and no type given")
-      _.shouldAssert(3,_tryThrowIfNotOfType,bc,str,"vName", "String", "test",un,un,"should throw as 'String' is no valid type to check against")
-      _.assert      (4,_tryThrowIfNotOfType,bc,str,"vName", "(String|string)", "test",un,un,"should not throw as 'string' is correct type and is contained in 2nd parameter")
-    }
-    function _tryConstruct(arg1, arg2,arg3) {
-      new BreadCrumbs(arg1,arg2,arg3)
-    }
-    function _tryThrowIfUndefined(arg1, arg2, arg3, arg4) {
-      let breadCrumbs = new BreadCrumbs({},"BreadCrumbs:key")
-      breadCrumbs.throwIfUndefined(arg1, arg2, arg3, arg4)
-    }
-    function _tryThrowIfNotOfType(bc,arg1, arg2, arg3, arg4,arg5,arg6) {
-      bc.throwIfNotOfType(arg1, arg2, arg3, arg4,arg5,arg6)
-    }
-  }
-}
-registeredTests.push(BreadCrumbs.test)
-registeredExceptions.push(
-  "new BreadCrumbs({},'goodName', new GenePool())",
-  "new BreadCrumbs({}, undefined, undefined)",
-  "new BreadCrumbs({}, 22, undefined)",
-  "new BreadCrumbs(22,'goodName', undefined)"
-)
-
-class Setting extends BreadCrumbs {
-  static #ROOT_KEY = GLOBAL_ROOT_KEY //  "/"
-  static #globalType = GLOBAL_SETTING_TYPE //  "(Number|String|Boolean|Array.<Number>|Array.<String>|Array.<Boolean>)"
-  #workersTypeForChildren
-  static #workers = {} // and managers
-  #works = {}
-  #children = {}
-  /**
-   * Workers registers by setting themselves <code>Setting.worker = WorkerClass</code>
-   * @type {Object.<string, Setting>}
-   * @param {Setting} workerClass
-   */
-  static set worker(workerClass) {
-    Setting.#workers[workerClass.workerKey] = workerClass
-  }
-  /**
-   * Returns workersTypeForChildren
-   * @type (Undefined|Setting)
-   */
-  get workersTypeForChildren() {
-    return this.#workersTypeForChildren
-  }
-  /**
-   * Type to be used for workers children construction
-   * @param {String} type
-   * @type {String}
-   */
-  set workersTypeForChildren(type) {
-    this.#workersTypeForChildren = type
-  }
-  /**
-   * Returns children
-   * @type Object
-   */
-  get children() {
-    return this.#children
-  }
-  /**
-   * Returns deep copy of parameter {@link literal}
-   *
-   * @param {*} literal - javascript variable of any type to be deep copied
-   * @returns {*}
-   */
-  static deepCopy(literal) {
-    let newLiteral
-    let type = typeof(literal)
-    if(type === "object") {
-      if(literal === null) {
-        type = "null"
-      } else if (Array.isArray(literal)) {
-        type = "array"
-      }
-    }
-    if(type !== "object") {
-      switch(type) {
-      case "array":
-        newLiteral = [];
-        literal.forEach(ele => {
-          newLiteral.push(Setting.deepCopy(ele))
-        });
-        break
-      case "function":
-      case "symbol":
-      case "null":
-      case "undefined":
-      case "boolean":
-      case "number":
-      case "bigint":
-      case "string":
-        newLiteral = literal
-        break
-      case "object":
-        throw new TypeError("Dies kann nicht passieren")
-        break
-      default:
-        throw new TypeError("Dies kann nur passieren, wenn JavaScript weitere Typen erhält")
-        break
-      }
-    } else {
-      newLiteral = {}
-      if(Object.keys(Object.getOwnPropertyDescriptors(literal)).length !==
-        Object.keys(literal).length) {
-        //;vaut("Setting:deepCopy",  "literal has Symbol properties", green, black)
-      }
-      for (const [k, v] of Object.entries(literal)) {
-        newLiteral[k] = Setting.deepCopy(v)
-      }
-    }
-    return newLiteral
-  }
-
-  /**
-   * @classdesc setting parser; traverses deep literal to flat output
-   *
-   * Setting is the only subclass which should be constructed from outside, with
-   * only literal given as argument.
-   *
-   * It calls the workers and traverses given literal to flat output; thereby
-   * respecting worker configuration rules and removing worker literals from
-   * output.
-   *
-   * <b>Workflow and requisites</b><br>
-   * BreadCrumbs:<br>
-   * - Adds undefined, boolean, number, bigint, string, symbol and function
-   * to this pool with callback cbkTypeOf.<br>
-   * - Adds date to this pool with callback cbkIsDate.<br>
-   * - Adds object with callback cbkIsObjectNotNullNotArray,
-   * null with callback cbkIsNull and
-   * array with callback cbkIsNull to this pool.
-   *
-   * AEssence:<br>
-   * - Adds "String", "Number", "Boolean", "Function" and "Object" to user pool
-   *   as Genes with callback cbkTypeOfLc.<br>
-   * - Adds "Date" to user pool as Genes with callback cbkIsDate.
-   *
-   * Setting:<br>
-   *  #globalType =
-   * "(Number|String|Boolean|Array.<Number>|Array.<String>|Array.<Boolean>)"
-   *
-   * <i>In German, id do not understand it in English. I suppose, other people
-   * would not understand it in my English, so not translated. </i>
-   *
-   * AEssence:<br>
-   * Für Nodes: (bedeutet: der Wert von __SPEC ist nicht Boolean)<br>
-   *     Vergleicht den Typ des Wertes des SPEC_Eintrags im __SPEC Node mit
-   *     einem hardcoded Typ ("String", "Boolean" oder "Object" werden zur
-   *     Zeit verwendet) oder, für DEFAULT und VALUE, dem Typ der in TYPE
-   *     gegeben wird. Für den Vergleich benutzt er den user pool.<br>
-   *     Wenn der Typ nicht stimmt, verwirft er den Wert und verwendet den
-   *     Wert der Parent AEssence, falls der SPEC_Eintrag inherited ist und
-   *     eine Parent AEssence existiert, sonst den hardcoded Default Wert.<br>
-   *     - Löscht alle SPEC_Einträge aus __SPEC Node.<br>
-   *     - Löscht den Eintrag __SPEC aus dem ParentNode<br>
-   *     - erzeugt für jeden SPEC_Eintrag (auch nicht angegebene) einen Wert
-   *       in der eigenen Instanz<br>
-   *     - für jeden SPEC_Eintrag (auch nicht angegebene) eine hidden
-   *       Property ans Node Literal<br>
-   * Für Atoms: (bedeutet: der Wert von __SPEC ist Boolean)<br>
-   *     Verwendet den ParentNode (den Node, der __SPEC enthält) als __SPEC
-   *     Node.<br>
-   *     Sets FLAT to true
-   *
-   * Setting:<br>
-   * Für Nodes: (bedeutet: der Wert von __SPEC ist nicht Boolean)<br>
-   *    Wie AEssence für Nodes.<br>
-   * Für Atoms:<br>
-   *    Für spezifizierte Atoms: (bedeutet: Der Wert ist ein Object und es
-   *                              enthält einen __SPEC Eintrag und
-   *                              dessen Wert ist vom Typ Boolean)<br>
-   *       Falls __SPEC true ist: <br>TYPE wird auf #globalType gesetzt
-   *                              (außer er ist parallel zu __SPEC gesetzt)<br>
-   *       Falls __SPEC false ist: <br>TYPE wird nicht gesetzt<br>
-   *                               hat damit den DEFAULT Wert<br>
-   *                              (außer er ist parallel zu __SPEC gesetzt)<br>
-   *    Für reine Atoms: (bedeutet: der Wert ist kein Object)<br>
-   *       erzeugt ein spezifiziertes Atom mit VALUE: Wert und __SPEC true
-   *       (damit wird TYPE zu #globalType)
-   *
-   *    Dann wie AEssence für Atoms.<br>
-   *    Danach wird VALUE aus der erzeugten AEssence zum Wert des Atoms.<br>
-   * @mermaid
-   * ---
-   * title: BreadCrumbs
-   * config:
-   *   theme: default
-   *   xatheme: default
-   *   xbtheme: neutral
-   *   xctheme: dark
-   *   xdtheme: forest
-   *   xetheme: base
-   *   xxtheme: baseIsTheOnlyThemeThatCanBeModified
-   *   layout: elk
-   *   xxlayout: dagre
-   *   xylayout: tidy-tree
-   *   class:
-   *     hideEmptyMembersBox: true
-   * ---
-   *  classDiagram
-   *      GenePool <|-- Essence
-   *      Essence <|-- AEssence
-   *      AEssence <|-- BreadCrumbs
-   *      BreadCrumbs <|-- Setting
-   * @extends BreadCrumbs
-   * @constructor
-   * @description
-   * Constructs a new Setting instance.
-   * Adds {@link Setting}
-   * to its pool as Gene with {@link GeneCallback|callback} {@link cbkInstanceOf}.
-   *
-   * Recurses into {@link Object} entries and creates {@link Setting} instances
-   * for them with <code>this</code> instance as parent and entry key as {@link key}.
-   *
-   * Creates {@link AEssence} instances for all other entries.
-   *
-   * Throws on wrong parameter types
-   * @param {Object} literal
-   * @param {(Undefined|String|Symbol)} key - if undefined, becomes root key
-   * @param {(Undefined|Setting)} parent
-   * @param {Boolean} add2parent - internal
-   * @throws {SettingError}
-   */
-  constructor(
-    literal,
-    key = undefined,
-    parent = undefined,
-    add2parent = false
-  ) {
-    if (LOG_ESSENCE_CONSTRUCTOR_2_CONSOLE) {
-      let name_x =
-        key === undefined
-          ? "undefined"
-          : typeof key == "symbol"
-          ? "_Symbol_" + GLOBAL_SYMBOL_COUNTER++
-          : key
-      let literal_x =
-        literal === undefined
-          ? "undefined"
-          : literal === null
-          ? "Null"
-          : false
-          ? JSON.stringify(literal, null, 4)
-          : flatten(literal)
-      let specLit_x =
-        literal != undefined ? flatten(literal["__SPEC"]) : "undefined"
-      if (parent == undefined)
-        aut(
-          `========================================================================================`,
-          lime
-        )
-      aut(
-        `========================================================================================`,
-        lime
-      )
-      aut(
-        `START Setting =========  ${name_x}  =========\n   SPEC: ${specLit_x}\n   Literal :${literal_x}`,
-        lime
-      )
-    }
-    super(literal, key === undefined ? Setting.#ROOT_KEY : key, parent)
-    this.addGene(Setting)
-    this.throwIfUndefined(literal, "literal")
-    // literal {(Undefined|Object)} checked by superclass
-    // key {(String|Symbol)} checked by superclass
-    // parent {(Undefined|BreadCrumbs)} checked by superclass
-    if (!this.isA(parent, "undefined"))
-      this.throwIfNotOfType(parent, "parent", Setting)
-    if (!this.ROOT)
-      this.#workersTypeForChildren = this.parent.workersTypeForChildren
-    if (add2parent && !this.ROOT) this.parent.children[key] = this
-
-    this.#parse()
-    if (LOG_ESSENCE_CONSTRUCTOR_2_CONSOLE) {
-      let name_x =
-        this.name === undefined
-          ? "undefined"
-          : typeof this.name == "symbol"
-          ? "_Symbol_" + GLOBAL_SYMBOL_COUNTER++
-          : this.name
-      let literal_x =
-        this.literal === undefined
-          ? "undefined"
-          : this.literal === null
-          ? "Null"
-          : false
-          ? JSON.stringify(this.literal, null, 4)
-          : flatten(this.literal)
-      let specLit_x =
-        this.literal != undefined
-          ? flatten(this.literal["__SPEC"])
-          : "undefined"
-      aut(
-        `   SPEC: ${specLit_x}\n   Literal :${literal_x}\nENDE Setting =====\
-====  ${name_x}  =============================================================`,
-        lime
-      )
-    }
-  }
-  #parse() {
-    let un
-    let type =
-      !this.ROOT && this.parent.workersTypeForChildren !== undefined
-        ? this.parent.workersTypeForChildren
-        : Setting.#globalType
-    for (const [childkey, childval] of Object.entries(this.literal)) {
-      if (!AEssence.doParse(childval)) continue
-      if (Setting.#isWorkerKey(childkey)) {
-        // constructs a workers instance
-        this.#works[childkey] =
-                        new Setting.#workers[childkey](childval, childkey, this)
-      } else if (this.isA(childval, "object")) {
-        let aEss = this.#essenceOfAtom(this.literal, childkey, type)
-        if (aEss != un) this.#children[childkey] = aEss
-        else this.#children[childkey] = new Setting(childval, childkey, this)
-      } else {
-        let litAtom = {VALUE: this.literal[childkey], __SPEC: true}
-        this.literal[childkey] = litAtom
-        this.#children[childkey] =
-                               this.#essenceOfAtom(this.literal, childkey, type)
-      }
-    }
-  }
-
-  /**
-   * Returns {@link AEssence} for <code>atomic literal</code>,
-   * <code>undefined</code> for <code>node literal</code>
-   *
-   * If value of {@link this.#SPEC_KEY|__SPEC} property
-   * of {@link literal}[{@link key}] is
-   * <code>undefined</code> or an {@link Object}
-   * {@link literal} is <code>node literal</code>,
-   * in any other case it is <code>atomic literal</code>
-   *
-   * For atomic literals:<br>
-   * If value of {@link this.#SPEC_KEY|__SPEC} is true,
-   * {@link AEssence#TYPE|TYPE} property with value  {@link type}
-   * is added to {@link literal}[{@link key}]. This only if {@link type}
-   * is a <code>String</code>. Nothing is added in any other case.<br>
-   * A new {@link AEssence} from (possibly changed, see above){@link literal}[{@link key}]
-   * is created with <code>this</code> instance as parent.<br>
-   * Value of {@link literal}[{@link key}] becomes {@link AEssence#VALUE|VALUE} of
-   * this newly created instance.
-   *
-   * Returns <code>undefined</code> on wrong parameter types
-   *<b>Simply said:</b> Changes value of {@link literal}[{@link key}]
-   * to given {@link AEssence#VALUE|VALUE}.
-   * @param {Object} literal
-   * @param {*} key
-   * @param {String} type
-   * @returns {(AEssence|Undefined)}
-   */
-  #essenceOfAtom(literal, key, type) {
-    if (typeof literal != "object") return undefined
-    let aEss = undefined
-    let specLit = literal[key][AEssence.SPEC_KEY]
-    if (typeof specLit == "boolean") {
-      if (
-        specLit == true &&
-        typeof type == "string" &&
-        literal[key]["TYPE"] == undefined
-      )
-        literal[key]["TYPE"] = type
-      aEss = new AEssence(literal[key], this, key)
-      literal[key] = aEss.VALUE
-    }
-    return aEss
-  }
-
-  /**
-   * Iterator
-   * @returns {AEssence}
-   */
-  iterator() {
-    /* don't know how to js document  [Symbol.iterator] otherwise*/
-  }
-
-  [Symbol.iterator]() {
-    let index = 0
-    return {
-      next: () => {
-        let keys = Object.keys(this.#children)
-        if (index < keys.length)
-          return {
-            value: [keys[index], this.#children[keys[index++]]],
-            done: false,
-          }
-        else return {done: true}
-      },
-    }
-  }
-
-  /** Returns whether entry for {@link key} exists
-   * @param {String} key
-   * @returns {Boolean}
-   */
-  has(key) {
-    if (typeof key == "string") {
-      let subKeys = key.split(".")
-      if (subKeys.length > 1) {
-        if (this.#works[subKeys[0]] !== undefined)
-          return this.#works[subKeys.shift()].has(subKeys.join("."))
-        else if (this.#children[subKeys[0]] !== undefined &&
-          this.isA(this.#children[subKeys[0]],Setting))
-          return this.#children[subKeys.shift()].has(subKeys.join("."))
-        else return false
-      }
-    }
-    if (this.#works[key]) return true
-    else if (this.#children[key]) return true
-    else return false
-  }
-
-  /** Returns entry for key
-   *
-   * @param {(String|Symbol)} key
-   * @returns {(AEssence|Setting)}
-   */
-  at(key) {
-    if (typeof key == "string") {
-      let subKeys = key.split(".")
-      if (subKeys.length > 1) {
-        if (this.#works[subKeys[0]] !== undefined)
-          return this.#works[subKeys.shift()].at(subKeys.join("."))
-        if (this.#children[subKeys[0]] !== undefined)
-          return this.#children[subKeys.shift()].at(subKeys.join("."))
-      }
-    }
-    if (this.#works[key]) return this.#works[key]
-    else return this.#children[key]
-  }
-
-  /** Returns value from worker, if {@link key} is registered worker, else from
-   * this
-   *
-   * @param {String} key - key can specify child keys by using points,
-   *                       e.g. "grandParentKey.parentKey.childKey"
-   * @param  {...any} params - for worker's getValue
-   * @returns {*}
-   */
-  getValue(key, ...params) {
-    let works_and_subkeys = this.#getWorks(key)
-    if (works_and_subkeys !== undefined) {
-      if (params === undefined)
-        return works_and_subkeys[0].getValue(works_and_subkeys[1])
-      else
-        return works_and_subkeys[0].getValue(works_and_subkeys[1], ...params)
-    } else {
-      if (this.at(key) !== undefined)
-        return this.at(key).VALUE
-    }
-  }
-
-  #getWorks(key) {
-    let answ
-    if (typeof key == "string") {
-      let subKeys = key.split(".")
-      let workerKey = subKeys.length > 1 ? subKeys[0] : key
-      if (this.#works[workerKey] !== undefined) {
-        answ = []
-        answ.push(this.#works[workerKey])
-        subKeys.shift()
-        answ.push(subKeys.join("."))
-      }
-    }
-    return answ
-  }
-
-  /** returns the settings object as string
-   *
-   */
-  toPlainString(indent="\n") {
-    let plainString = ""
-    let sectionKeys = Object.keys(this.#works)
-    for(const key in this.#works) {
-      if(this.#works.hasOwnProperty(key)) {
-        plainString += indent + key + ": "
-        plainString += "{"
-        plainString += this.#works[key].toPlainString(indent+"  ")
-        plainString += indent + "}"
-        plainString += ","
-      }
-    }
-    for (const [key, value] of this) {
-      plainString+= indent + key + ": "
-      if (value.FLAT) {
-        plainString+= Setting.valueString(value.VALUE)
-      } else {
-        plainString+= "{"
-        plainString+=value.toPlainString(indent+"  ")
-        plainString+= indent + "}"
-      }
-      plainString+= ","
-    }
-    return plainString
-  }
-  static valueString(value) {
-    let valueString = ""
-    if (typeof value=== "function") {
-      valueString += value.name
-    } else if (typeof value === "string") {
-      valueString += "\"" + value+"\""
-    } else if (typeof value=== "boolean") {
-      valueString+= value
-    } else if (Array.isArray(value)) {
-      valueString+= "["
-      value.forEach((ele) => {
-        valueString+= Setting.valueString(ele)
-        valueString+= ","
-      })
-      valueString+= "]"
-    } else {
-      valueString+= value
-    }
-    return valueString
-  }
-  /** Returns all frontmatter entries of this instance and descendants
-   * besides IGNORED ones.
-   * Workers are not treated as descendants. Otherwise entries
-   * for all notetypes would be gathered if called from root.
-   * @returns  {Object.<String.any>}
-   */
-  getFrontmatterYAML() {
-    let frontmatterYAML = {}
-    for (const [key, value] of this) {
-      if (value.FLAT) {
-        if (value.RENDER != undefined && !value.RENDER && !value.IGNORE)
-          frontmatterYAML[key] = value.VALUE
-      } else {
-        Object.assign(frontmatterYAML, value.getFrontmatterYAML())
-      }
-    }
-    return frontmatterYAML
-  }
-
-  /** Returns all render entries of this instance and descendants
-   * besides IGNORED ones.
-   * Workers are not treated as descendants. Otherwise entries
-   * for all notetypes would be gathered if called from root.
-   * @returns  {Object.<String.any>}
-   */
-  getRenderYAML() {
-    let renderYAML = {}
-    for (const [key, value] of Object.entries(this.#children)) {
-      if (value.FLAT) {
-        if (value.RENDER && !value.IGNORE) renderYAML[key] = value.VALUE
-      } else Object.assign(renderYAML, value.getRenderYAML())
-    }
-    return renderYAML
-  }
-
-  /** Returns all general entries of this instance and descendants
-   * besides IGNORED ones.
-   * @returns  {Object.<String.any>}
-   */
-  getGeneralYAML() {
-    let generalYAML = {}
-    for (const [key, value] of this) {
-      if (value.FLAT) {
-        if (value.RENDER == undefined && !value.IGNORE)
-          generalYAML[key] = value.VALUE
-      } else {
-        Object.assign(generalYAML, value.getGeneralYAML())
-      }
-    }
-    return generalYAML
-  }
-  /** LOGS all key.VALUE pairs recursive to console
-   * Functions are shortenend to String "FUNCTION"
-   * @param {Number} depth
-   */
-  showVALUES(depth) {
-    let indent = ""
-    for(let d=depth;d>0;d--) indent += "    "
-    for (const [key, value] of this) {
-      if(typeof value.VALUE == "function") {
-        vaut(indent+key+".VALUE", "FUNCTION")
-      } else {
-        vaut(indent+key, value.VALUE)
-      }
-      if(value.isA(value, Setting))
-        value.showVALUES(depth+1)
-    }
-  }
-
-  /** LOGS all keys with their VALUE and DEFAULT token recursive to console.
-   * Functions are shortenend to String "FUNCTION"
-   * @param {Number} depth
-   */
-  showVALUE_DEFAULT(depth) {
-    let indent = ""
-    for(let d=depth;d>0;d--) indent += "    "
-    for (const [key, value] of Object.entries(this.#children)) {
-      if(typeof value.VALUE == "function")
-        vaut(indent+key+".VALUE", "FUNCTION")
-      else if(typeof value.VALUE != "string" || value.VALUE.length > 0)
-        vaut(indent+key+".VALUE", value.VALUE)
-      if(typeof value.DEFAULT != "string" || value.DEFAULT.length > 0)
-        vaut(indent+key+".DEFAULT", value.DEFAULT)
-      if(typeof value.VALUE == "string" && value.VALUE.length == 0 &&
-        typeof value.DEFAULT == "string" && value.DEFAULT.length == 0)
-        vaut(indent+key+".DEFAULT|VALUE", "-----")
-      if(value.isA(value, Setting)) {
-        value.showVALUE_DEFAULT(depth+1)
-      }
-    }
-  }
-
-  /** LOGS all keys recursive to console with some of their tags.
-   * Functions are shortenend to String "FUNCTION"
-   * @param {Number} depth
-   */
-  showWhatGoesOut(depth) {
-    let indent = ""
-    if(depth == 0)
-      vaut("RENDER|IGNORE|REPEAT|FLAT", "KEY:VALUE:DEFAULT")
-    for(let d=depth;d>0;d--) indent += "    "
-    for (const [key, value] of this) {
-      let render = value.RENDER + "|"
-      let ignore = value.IGNORE + "|"
-      let repeat = value.REPEAT + "|"
-      let flat = value.FLAT
-      let val = value.VALUE
-      let def = value.DEFAULT
-      if(typeof value.VALUE == "function") val="FUNCTION"
-      if(typeof value.DEFAULT == "function") def="FUNCTION"
-      vaut(indent+render+ignore+repeat+flat, key+":"+val+":"+def)
-      if(value.isA(value, Setting))
-        value.showWhatGoesOut(depth+1)
-    }
-  }
-
-
-  /** Returns whether key is main key of known workers
-   * @param {*} key
-   * @returns {Boolean}
-   */
-  static #isWorkerKey(key) {
-    return Setting.#workers[key] !== undefined
-  }
-
-  // prettier-ignore
-  static test(outputObj) { // Setting
-    let _ = null
-    if(_ = new TestSuite("Setting", outputObj)) {
-      _.run(getterLiteralTest)
-      _.run(setterWorkersTest)
-      _.run(setterWorkersTypeForChildrenTest)
-      _.run(constructorTest)
-      _.run(isATest)
-      _.run(toDisplayStringTest)
-      _.run(iteratorTest)
-      _.run(hasTest)
-      _.run(atTest)
-      _.run(getValueTest)
-      _.run(getFrontmatterYAMLTest)
-      _.run(getRenderYAMLTest)
-      _.run(atomsTest)
-      _.run(deepLiteralTest)
-      _.destruct()
-    _ = null
-    }
-    function getterLiteralTest() {
-      let un
-      let sym = Symbol("a")
-      let setting1 = new Setting({},"Setting:getterLiteralTest02",un)
-      let setting2 = new Setting({sym: {}},"Setting:getterLiteralTest03",un)
-      let setting3 = new Setting({"SECTION_NOTETYPES": {}},"Setting:getterLiteralTest04",un)
-      let setting4 = new Setting({"a": {"MARKER":"2"}},"Setting:getterLiteralTest05",un)
-      let setting5 = new Setting({"a": {"MARKER":"2","DATE":true,}},"Setting:getterLiteralTest06",un)
-      let setting6 = new Setting({"a": {MARKER:"2",DATE:false,},"d": {TITLE_BEFORE_DATE:"abc"}},"Setting:getterLiteralTest07",un)
-      let lit1 = setting1.literal
-      let lit2 = setting2.literal
-      let lit3 = setting3.literal
-      let lit4 = setting4.literal
-      let lit5 = setting5.literal
-      let lit6 = setting6.literal
-      _.bassert(1,Object.keys(lit1).length === 0,"literal should be empty as given")
-      _.bassert(2,Object.keys(lit2).length === 1,"only 1 value should be contained, as only one given")
-      _.bassert(3,Object.keys(lit2.sym).length === 0,"object assigned to symbol key should be empty as given")
-      _.bassert(4,Object.keys(lit3).length === 1,"only 1 value should be contained, as only one given")
-      _.bassert(5,Object.keys(lit3.SECTION_NOTETYPES).length === 0,"object assigned to 'SECTION_NOTETYPES' key should be empty as given")
-      _.bassert(6,Object.keys(lit4).length === 1,"only 1 value should be contained, as only one given")
-      _.bassert(7,Object.keys(lit4.a).length === 1,"object assigned to 'a' should only contain one entry as only one given")
-      _.bassert(8,lit4.a.MARKER === "2","value of a.MARKER should be '2' as given")
-      _.bassert(9,Object.keys(lit5).length === 1,"only 1 value should be contained, as only one given")
-      _.bassert(10,Object.keys(lit5.a).length === 2,"object assigned to 'a' should contain 2 entries as two given")
-      _.bassert(11,lit5.a.MARKER === "2","value of a.MARKER should be '2' as given")
-      _.bassert(12,lit5.a.DATE === true,"value of a.DATE should be 'true' as given")
-      _.bassert(13,Object.keys(lit6).length === 2,"2 values should be contained, as two given")
-      _.bassert(14,Object.keys(lit6.a).length === 2,"object assigned to 'a' should contain 2 entries as two given")
-      _.bassert(15,Object.keys(lit6.d).length === 1,"object assigned to 'd' should only contain one entry as only one given")
-      _.bassert(16,lit6.a.MARKER === "2","value of a.MARKER should be '2' as given")
-      _.bassert(17,lit6.a.DATE === false,"value of a.DATE should be 'false' as given")
-      _.bassert(18,lit6.d.TITLE_BEFORE_DATE === "abc","value of d.TITLE_BEFORE_DATE should be 'abc' as given")
-    }
-    function setterWorkersTest() {
-      class testWorker extends Setting {
-        static get workerKey() {
-          return "__TEST"
-        }
-        constructor(literal, key, parent) {
-          super(literal,key,parent)
-          this.addGene(testWorker)
-          delete literal["remove"]
-        }
-      }
-      let lit = {__TEST:{remove:"Not removed", stay:"Always there"}}
-      Setting.worker = testWorker
-      let set = new Setting(lit)
-      _.bassert(1,lit["__TEST"]["remove"]==undefined,"Test worker removes it")
-      _.bassert(2,lit["__TEST"]["stay"]=="Always there","Test worker leaves it")
-    }
-    function setterWorkersTypeForChildrenTest() {
-      class testWorker extends Setting {
-        static get workerKey() {
-          return "__TEST"
-        }
-        constructor(literal, key, parent) {
-          parent.workersTypeForChildren = "Boolean"
-          super(literal,key,parent)
-          this.addGene(testWorker)
-        }
-      }
-      let lit = {__TEST:{bool:true, str:"not allowed"}}
-      Setting.worker = testWorker
-      let set = new Setting(lit)
-      _.bassert(1,set.at("__TEST").getValue("bool")==true,"Boolean is ok")
-      _.bassert(2,set.at("__TEST").getValue("str")=="","String not allowed")
-    }
-    function constructorTest() {
-      let un
-      let b = new BreadCrumbs(un, "Setting:constructorTest", un)
-      let st = new Setting({}, "Setting:constructorTest1", un)
-      _.assert(1,_tryConstruct,{},"Setting:cTest1",un,"should be created, all parameters ok")
-      _.shouldAssert(2,_tryConstruct,un,"Setting:cTest2",un,"should not be created, literal is undefined")
-      _.shouldAssert(3,_tryConstruct,22,"Setting:cTest3",un,"should not be created, literal is number")
-      _.shouldAssert(4,_tryConstruct,"literal","Setting:cTest4",un,"should not be created, literal is string")
-      _.shouldAssert(5,_tryConstruct,null,"Setting:cTest5",un,"should not be created, literal is null")
-      _.assert(6,_tryConstruct,{},un,un,"should be created, undefined key is ok")
-      _.shouldAssert(7,_tryConstruct,{},22,un,"should not be created, key is number")
-      _.shouldAssert(8,_tryConstruct,{},{},un,"should not be created, key is object")
-      _.shouldAssert(9,_tryConstruct,{},b,un,"should not be created, key is Object")
-      _.assert(10,_tryConstruct,{},Symbol("a"),un,"should be created, key is Symbol")
-      _.assert(11,_tryConstruct,{},"Setting:cTest11",un,"should  be created, undefined parent is ok")
-      _.shouldAssert(12,_tryConstruct,{},"Setting:cTest12",new Error(),"should not be be created, parent is Error")
-      _.shouldAssert(13,_tryConstruct,{},"Setting:cTest13",{},"should not be be created, parent is object")
-      _.shouldAssert(14,_tryConstruct,{},"Setting:cTest14","ring","should not be be created, parent is string")
-      _.shouldAssert(15,_tryConstruct,{},"Setting:cTest15",22,"should not be be created, parent is number")
-      _.shouldAssert(16,_tryConstruct,{},"Setting:cTest16",null,"should not be be created, parent is null")
-      _.shouldAssert(16,_tryConstruct,{},"Setting:cTest16",b,"should not be be created, parent is BreadCrumbs")
-      let setting = new Setting({},"Setting:constructorTest101")
-      _.bassert(101,setting instanceof Object,"'Setting' has to be an instance of 'Object'")
-      _.bassert(102,setting instanceof BreadCrumbs,"'Setting' has to be an instance of 'BreadCrumbs'")
-      _.bassert(103,setting instanceof Setting,"'Setting' has to be an instance of 'Setting'")
-      _.bassert(104,setting.constructor === Setting,"the constructor property is not 'Setting'")
-    }
-    function isATest() {
-      // Object, Gene, GenePool, AEssence added for each AEssence instance
-      // BreadCrumbs added for each BreadCrumbs instance
-      // "undefined", "null", "boolean", "number", "bigint", "string", "symbol",
-      // "function", "object", "array" added for each BreadCrumbs instance
-      // Setting added for each Setting instance
-      let un
-      let setting1 = new Setting({},"Setting:NameIsATest",un)
-      _.bassert(1,setting1.isA(setting1,"object"), "'" + setting1 + "' should be a " + "object")
-      _.bassert(2,setting1.isA(setting1,Object), "'" + setting1 + "' should be a " + "Object")
-      _.bassert(3,setting1.isA(setting1,GenePool), "'" + setting1 + "' should be a " + "GenePool")
-      _.bassert(4,setting1.isA(setting1,Essence), "'" + setting1 + "' should be a " + "Essence")
-      _.bassert(5,setting1.isA(setting1,AEssence), "'" + setting1 + "' should be a " + "AEssence")
-      _.bassert(6,setting1.isA(setting1,BreadCrumbs), "'" + setting1 + "' should be a " + "BreadCrumbs")
-      _.bassert(7,setting1.isA(setting1,Setting), "'" + setting1 + "' should be a " + "Setting")
-      _.bassert(8,!setting1.isA(setting1,Error), "'" + setting1 + "' should not be a " + "Error")
-      _.bassert(9,!setting1.isA(setting1,Gene), "'" + setting1 + "' should not be a " + "Gene")
-    }
-    function toDisplayStringTest() {
-      let un
-      let setting1 = new Setting({},"SetTing:toDisplayStringTest1",un)
-      _.bassert(1,setting1.toDisplayString().includes("toDisplayStringTest1"),"result does not contain name string"    )
-      _.bassert(2,setting1.toDisplayString().includes("Setting"),"result does not contain class string"    )
-    }
-    function iteratorTest() {
-      /**********************************************************************/{
-      let lit = {a:"A",b:2,c:true,d:{da:"A", db:2, dc:true} }
-      let set = new Setting(lit)
-      let keyStr = ""
-      let valStr = ""
-      let expKeyStr = "abcd"
-      let expValStr = "A2true"
-      for (const [key, value] of set) {
-        keyStr+=key
-        valStr+=value.VALUE
-      }
-      _.bassert(1,keyStr == expKeyStr,"all keys should be contained")
-      _.bassert(2,valStr == expValStr,"all value.VALUEs should be contained")
-      keyStr = ""
-      valStr = ""
-      let expKeyStr2 = "ab"
-      let expValStr2 = "A2"
-      for (const [key, value] of set) {
-        keyStr+=key
-        valStr+=value.VALUE
-        if(key == "b") break
-      }
-      _.bassert(11,keyStr == expKeyStr2,"first 2 keys should be contained")
-      _.bassert(12,valStr == expValStr2,"first 2 value.VALUEs should be contained")
-      keyStr = ""
-      valStr = ""
-      for (const [key, value] of set) {
-        keyStr+=key
-        valStr+=value.VALUE
-      }
-      _.bassert(21,keyStr == expKeyStr,"all keys should be contained")
-      _.bassert(22,valStr == expValStr,"all value.VALUEs should be contained")
-      }/**********************************************************************/{
-      let lit = {a:"A",b:2,c:true,d:{da:"A", db:2, dc:true},e:"ja" }
-      let set = new Setting(lit)
-      let keyStr = ""
-      let valStr = ""
-      let expKeyStr = "a b c d da db dc e "
-      let expValStr = "A 2 true A 2 true ja "
-      for (const [key, value] of set) {
-        keyStr+=key + " "
-        if(value.FLAT)
-          valStr+=value.VALUE + " "
-        else
-        for (const [k, v] of value) {
-          keyStr+=k + " "
-          valStr+=v.VALUE + " "
-        }
-      }
-      _.bassert(31,keyStr == expKeyStr,"Should contain all keys")
-      _.bassert(32,valStr == expValStr, "Should contain all values")
-
-      keyStr = ""
-      valStr = ""
-      let expKeyStr2 = "a b c d da db e "
-      let expValStr2 = "A 2 true A 2 ja "
-      for (const [key, value] of set) {
-        keyStr+=key + " "
-        if(value.FLAT)
-          valStr+=value.VALUE + " "
-        else
-        for (const [k, v] of value) {
-          keyStr+=k + " "
-          valStr+=v.VALUE + " "
-          if(k == "db") break
-        }
-      }
-      _.bassert(41,keyStr == expKeyStr2,"Should contain all keys except the last of 'd'")
-      _.bassert(42,valStr == expValStr2, "Should contain all values except the last of 'd'")
-
-      keyStr = ""
-      valStr = ""
-      for (const [key, value] of set) {
-        keyStr+=key + " "
-        if(value.FLAT)
-          valStr+=value.VALUE + " "
-        else
-        for (const [k, v] of value) {
-          keyStr+=k + " "
-          valStr+=v.VALUE + " "
-        }
-      }
-      _.bassert(51,keyStr == expKeyStr,"Should contain all keys")
-      _.bassert(52,valStr == expValStr, "Should contain all values")
-      }/**********************************************************************/{
-      let lit = {a:"A",b:2,c:true,d:{da:"A", db:2, dc:true},e:"ja" }
-      let set = new Setting(lit)
-      let keyStr = ""
-      let valStr = ""
-      let expKeyStr = "a b c d da db dc e "
-      let expValStr = "A 2 true A 2 true ja "
-      for (const [key, value] of set) {
-        keyStr+=key + " "
-        if(value.FLAT)
-          valStr+=value.VALUE + " "
-        else
-        for (const [k, v] of value) {
-          keyStr+=k + " "
-          valStr+=v.VALUE + " "
-        }
-      }
-      _.bassert(61,keyStr == expKeyStr,"Should contain all keys")
-      _.bassert(62,valStr == expValStr, "Should contain all values")
-
-      keyStr = ""
-      valStr = ""
-      let expKeyStr2 = "a b c d da dc e "
-      let expValStr2 = "A 2 true A true ja "
-      for (const [key, value] of set) {
-        keyStr+=key + " "
-        if(value.FLAT)
-          valStr+=value.VALUE + " "
-        else
-        for (const [k, v] of value) {
-          if(k == "db") continue
-          keyStr+=k + " "
-          valStr+=v.VALUE + " "
-        }
-      }
-      _.bassert(71,keyStr == expKeyStr2,"Should contain all keys except the last of 'd'")
-      _.bassert(72,valStr == expValStr2, "Should contain all values except the last of 'd'")
-
-      keyStr = ""
-      valStr = ""
-      for (const [key, value] of set) {
-        keyStr+=key + " "
-        if(value.FLAT)
-          valStr+=value.VALUE + " "
-        else
-        for (const [k, v] of value) {
-          keyStr+=k + " "
-          valStr+=v.VALUE + " "
-        }
-      }
-      _.bassert(81,keyStr == expKeyStr,"Should contain all keys")
-      _.bassert(82,valStr == expValStr, "Should contain all values")
-      }/**********************************************************************/{
-      class testWorker extends Setting {
-        static get workerKey() {
-          return "__TEST"
-        }
-        constructor(literal, key, parent) {
-          parent.workersTypeForChildren = "(Number|Array.<Number>)"
-          super(literal,key,parent)
-          this.addGene(testWorker)
-        }
-      }
-      let lit = {__TEST:{a:1,b:2,c:3,d:{da:4, db:5, dc:6},e:7 }}
-      Setting.worker = testWorker
-      let set = new Setting(lit)
-      let keyStr = ""
-      let valStr = ""
-      let expKeyStr = "a b c d da db dc e "
-      let expValStr = "1 2 3 4 5 6 7 "
-      for (const [key, value] of set.at("__TEST")) {
-        keyStr+=key + " "
-        if(value.FLAT)
-          valStr+=value.VALUE + " "
-        else
-        for (const [k, v] of value) {
-          keyStr+=k + " "
-          valStr+=v.VALUE + " "
-        }
-      }
-      _.bassert(91,keyStr == expKeyStr,"Should contain all keys")
-      _.bassert(92,valStr == expValStr, "Should contain all values")
-
-      }/**********************************************************************/
-
-    }
-    function hasTest() {
-      /**********************************************************************/{
-      let lit = {pos:[22,12], deep: {deeper: {pos:[14,13,18]}}}
-      let set = new Setting(lit)
-      let answ1 = set.has("deep")
-      let answ2 = set.has("deep.deeper")
-      let answ3 = set.has("deep.deeper.pos")
-      let answ4 = set.has("neep.deeper.pos")
-      let answ5 = set.has("deep.deeper.xos")
-      let answ6 = set.has("deep.deeper.pos.ne")
-      _.bassert(1,answ1==true,"'deep' exists")
-      _.bassert(2,answ2==true,"'deep.deeper' exists")
-      _.bassert(3,answ3==true,"'deep.deeper.pos' exists")
-      _.bassert(4,answ4==false,"'neep' does not exist")
-      _.bassert(5,answ5==false,"'deep.deeper.xos' does not exist")
-      _.bassert(6,answ6==false,"'deep.deeper.pos.ne' does not exist")
-      }/**********************************************************************/{
-      class testWorker extends Setting {
-        static get workerKey() {
-          return "__TEST"
-        }
-        constructor(literal, key, parent) {
-          parent.workersTypeForChildren = "(Number|Array.<Number>)"
-          super(literal,key,parent)
-          this.addGene(testWorker)
-        }
-      }
-      let lit = {__TEST:{pos:[22,12], deep: {deeper: {pos:[14,13,18]}}}}
-      Setting.worker = testWorker
-      let set = new Setting(lit)
-      let answer1 = set.has("__TEST")
-      let answer2 = set.has("__TEST.deep")
-      let answer3 = set.has("__TEST.deep.deeper")
-      let answer4 = set.has("__TEST.deep.deeper.pos")
-      let answer5 = set.has("__NEST.deep.deeper.pos")
-      let answer6 = set.has("__TEST.neep")
-      let answer7 = set.has("__TEST.deep.deeper.nos")
-      let answer8 = set.has("__TEST.deep.deeper.pos.ne")
-      _.bassert(1,answer1==true,"Workers root exists")
-      _.bassert(2,answer2==true,"Workers 'deep' exists")
-      _.bassert(3,answer3==true,"Workers 'deep.deeper' exists")
-      _.bassert(4,answer4==true,"Workers 'deep.deeper.pos' exists")
-      _.bassert(5,answer5==false,"Worker '__NEST' does not exist")
-      _.bassert(6,answer6==false,"Workers 'neep' does not exist")
-      _.bassert(7,answer7==false,"Workers 'deep.deeper.nos' does not exist")
-      _.bassert(8,answer8==false,"Workers 'deep.deeper.pos.ne' does not exist")
-      }/**********************************************************************/
-    }
-    function atTest() {
-      /**********************************************************************/{
-      let lit = {pos:[22,12], deep: {deeper: {pos:[14,13,18]}}}
-      let set = new Setting(lit)
-      let answ1 = set.at("deep")
-      let answ2 = set.at("deep.deeper")
-      let answ3 = set.at("deep.deeper.pos")
-      _.bassert(1,set.getValue("deep.deeper.pos")[2]==18,"should return value root")
-      _.bassert(2,answ1.getValue("deeper.pos")[2]==18,"should return its 'deep'")
-      _.bassert(3,answ2.getValue("pos")[2]==18,"should return its 'deep.deeper'")
-      _.bassert(4,answ3.VALUE[2]==18,"should return its 'deep.deeper.pos'")
-      }/**********************************************************************/{
-      class testWorker extends Setting {
-        static get workerKey() {
-          return "__TEST"
-        }
-        constructor(literal, key, parent) {
-          parent.workersTypeForChildren = "(Number|Array.<Number>)"
-          super(literal,key,parent)
-          this.addGene(testWorker)
-        }
-      }
-      let lit = {__TEST:{pos:[22,12], deep: {deeper: {pos:[14,13,18]}}}}
-      Setting.worker = testWorker
-      let set = new Setting(lit)
-      let test = set.at("__TEST")
-      let test1 = set.at("__TEST.deep")
-      let test2 = set.at("__TEST.deep.deeper")
-      let test3 = set.at("__TEST.deep.deeper.pos")
-      _.bassert(1,test.getValue("deep.deeper.pos")[2]==18,"should return Workers root")
-      _.bassert(2,test1.getValue("deeper.pos")[2]==18,"should return Workers 'deep'")
-      _.bassert(3,test2.getValue("pos")[2]==18,"should return Workers 'deep.deeper'")
-      _.bassert(3,test3.VALUE[2]==18,"should return Workers 'deep.deeper.pos'")
-      }/**********************************************************************/
-    }
-    function getValueTest() {
-      /**********************************************************************/{
-      let lit = {a:2, b:{bb:"bbValue"}}
-      let set = new Setting(lit,"Setting:getValueTest1")
-      _.bassert(1,set.getValue("a") ==2,"should return value of a")
-      _.bassert(2,set.getValue("b") =="","value for node is empty string")
-      _.bassert(3,set.getValue("b.bb") =="bbValue","should return value of bb")
-      _.bassert(4,set.getValue("b.bbb") ==undefined,"key not there,should return undefined")
-      }/**********************************************************************/{
-      class testWorker extends Setting {
-        static get workerKey() {
-          return "__TEST"
-        }
-        constructor(literal, key, parent) {
-          parent.workersTypeForChildren = "(Number|Array.<Number>)"
-          super(literal,key,parent)
-          this.addGene(testWorker)
-        }
-      }
-      let lit = {__TEST:{pos:[22,12], str:"not allowed"}}
-      Setting.worker = testWorker
-      let set = new Setting(lit)
-      _.bassert(1,set.getValue("__TEST.pos")[0] ==22,"should return value of Worker")
-      _.bassert(2,set.getValue("__TEST.notThere") ==undefined,"is not there, has no VALUE")
-      _.bassert(3,set.getValue("__TEST") ==undefined,"is not FLAT, has no VALUE")
-      }/**********************************************************************/
-    }
-    function getFrontmatterYAMLTest() {
-      const lit1 = {__SPEC: {RENDER: false}, a: 23}
-      const lit2 = {__SPEC: {RENDER: false}, a: 23, b: "ja"}
-      const lit3 = {__SPEC: {RENDER: false}, a: 23, c: {b: "ja"}, d: "ja"}
-      const lit4 = {__SPEC: {RENDER: false}, a: 23, c: {b: "ja", c: {c: 25}}, d: "ja"}
-      const lit5 = {__SPEC: {RENDER: false} , a: 23, c: {__SPEC: {RENDER: true}, pict: "ja", d: {__SPEC: {RENDER: false}, x: "y"}}}
-      let setting1 = new Setting(lit1,"Setting:getFrontmatterYAMLTest1")
-      let setting2 = new Setting(lit2,"Setting:getFrontmatterYAMLTest2")
-      let setting3 = new Setting(lit3,"Setting:getFrontmatterYAMLTest3")
-      let setting4 = new Setting(lit4,"Setting:getFrontmatterYAMLTest4")
-      let setting5 = new Setting(lit5,"Setting:getFrontmatterYAMLTest5")
-      let answ1f = setting1.getFrontmatterYAML()
-      let answ2f = setting2.getFrontmatterYAML()
-      let answ3f = setting3.getFrontmatterYAML()
-      let answ4f = setting4.getFrontmatterYAML()
-      let answ5f = setting5.getFrontmatterYAML()
-      let expAnsw1f = '{"a":23}'
-      let expAnsw2f = '{"a":23,"b":"ja"}'
-      let expAnsw3f = '{"a":23,"b":"ja","d":"ja"}'
-      let expAnsw4f = '{"a":23,"b":"ja","c":25,"d":"ja"}'
-      let expAnsw5f = '{"a":23,"x":"y"}'
-      _.bassert(1,JSON.stringify(answ1f) === expAnsw1f,`output of JSON.stringify(result) is:'${JSON.stringify(answ1f)}',but should be:'${expAnsw1f}'`)
-      _.bassert(2,JSON.stringify(answ2f) === expAnsw2f,`output of JSON.stringify(result) is:'${JSON.stringify(answ2f)}',but should be:'${expAnsw2f}'`)
-      _.bassert(3,JSON.stringify(answ3f) === expAnsw3f,`output of JSON.stringify(result) is:'${JSON.stringify(answ3f)}',but should be:'${expAnsw3f}'`)
-      _.bassert(4,JSON.stringify(answ4f) === expAnsw4f,`output of JSON.stringify(result) is:'${JSON.stringify(answ4f)}',but should be:'${expAnsw4f}'`)
-      _.bassert(5,JSON.stringify(answ5f) === expAnsw5f,`output of JSON.stringify(result) is:'${JSON.stringify(answ5f)}',but should be:'${expAnsw5f}'`)
-    }
-    function getRenderYAMLTest() {
-      const lit1 = {a: 23, c: {b: "ja", c: {c: 25}}, d: "ja"}
-      const lit2 = {a: 23, c: {__SPEC: {RENDER: true}, pict: "ja"}}
-      const lit3 = {a: 23, c: {b: "ja"}, d: "ja"}
-      const lit4 = {
-        c: {
-          __SPEC: {RENDER: true},
-          pict: "ja",
-          d: {__SPEC: {RENDER: false},
-             private: true,
-             x: {
-              __SPEC: {RENDER: true},
-              y:"z"
-             }
-          },
-        },
-      }
-      let setting1 = new Setting(lit1,"Setting:getRenderYAMLTest1")
-      let setting2 = new Setting(lit2,"Setting:getRenderYAMLTest2")
-      let setting3 = new Setting(lit3,"Setting:getRenderYAMLTest3")
-      let setting4 = new Setting(lit4,"Setting:getRenderYAMLTest4")
-      let answ1 = setting1.getRenderYAML()
-      let answ2 = setting2.getRenderYAML()
-      let answ3 = setting3.getRenderYAML()
-      let answ4 = setting4.getRenderYAML()
-      let expAnsw1 = "{}"
-      let expAnsw2 = '{"pict":"ja"}'
-      let expAnsw3 = "{}"
-      let expAnsw4 = '{"pict":"ja","y":"z"}'
-      _.bassert(1,JSON.stringify(answ1) === expAnsw1,`output of JSON.stringify(result) is:'${JSON.stringify(answ1)}',but should be:'${expAnsw1}'`)
-      _.bassert(2,JSON.stringify(answ2) === expAnsw2,`output of JSON.stringify(result) is:'${JSON.stringify(answ2)}',but should be:'${expAnsw2}'`)
-      _.bassert(3,JSON.stringify(answ3) === expAnsw3,`output of JSON.stringify(result) is:'${JSON.stringify(answ3)}',but should be:'${expAnsw3}'`)
-      _.bassert(4,JSON.stringify(answ4) === expAnsw4,`output of JSON.stringify(result) is:'${JSON.stringify(answ4)}',but should be:'${expAnsw4}'`)
-    }
-    function atomsTest() {
-      /**********************************************************************/{
-        let lit = {
-        a: "stg",
-        b: 22,
-        c: true,
-        d: cbkFmtCreated,
-        e: {ee: "internal"},
-        f: "2023-01-31",
-        g: null,
-        h: undefined,
-       }
-      if(false){
-      let ess0 = new AEssence({},un,"atomsTest")
-      console.log(`ess0: '${ess0}'`)
-      console.log(`ess0.DEFAULT: '${ess0.DEFAULT}'`)
-      console.log(`ess0.FLAT: '${ess0.FLAT}'`)
-      console.log(`ess0.IGNORE: '${ess0.IGNORE}'`)
-      console.log(`ess0.LOCAL: '${ess0.LOCAL}'`)
-      console.log(`ess0.ONCE: '${ess0.ONCE}'`)
-      console.log(`ess0.RENDER: '${ess0.RENDER}'`)
-      console.log(`ess0.REPEAT: '${ess0.REPEAT}'`)
-      console.log(`ess0.ROOT: '${ess0.ROOT}'`)
-      console.log(`ess0.TYPE: '${ess0.TYPE}'`)
-      console.log(`ess0.VALUE: '${ess0.VALUE}'`)
-      }
-
-      }/**********************************************************************/{
-      }/**********************************************************************/
-    }
-    function deepLiteralTest() {
-      /************************************************************/if(true){
-        let lit0 = { __SPEC: {TYPE: "Number",RENDER: false},
-        pict: {VALUE: "Russian-Matroshka2.jpg",
-              __SPEC: true, RENDER: true, },
-        integer: {VALUE: 127, __SPEC: false, },
-        soso: [128,127],
-        noValue: {__SPEC: true, },
-        noValueButType: {__SPEC: false, },
-      }
-      let set0 = new Setting(lit0,"Setting:deepLiteralTest0")
-      let frontMY0 = set0.getFrontmatterYAML()
-      let renderY0 = set0.getRenderYAML()
-      _.bassert(1,frontMY0["integer"] == 127,"Type of 'Number' should be inherited")
-      _.bassert(2,areEqual(frontMY0["soso"],[128,127]),"Type of 'Array.<Number>' should be general")
-      _.bassert(3,frontMY0["noValue"] == "","No value should become default empty string")
-      _.bassert(4,frontMY0["noValueButType"] === "","No value should become default empty string, even if type is set to 'Number'")
-      _.bassert(5,Object.keys(frontMY0).length == 4,"only added entries should appear in frontmatter YAML")
-      _.bassert(6,renderY0["pict"] == "Russian-Matroshka2.jpg","'pict' should be in render YAML as given")
-      _.bassert(7,renderY0["integer"] == undefined,"'integer' should not appear in render YAML")
-      _.bassert(8,renderY0["soso"] == undefined,"'soso' should not appear in render YAML")
-      _.bassert(9,Object.keys(renderY0).length == 1,"only added entries should appear in render YAML")
-
-      }/************************************************************/if(true){
-      let lit1 = {  __SPEC: {RENDER: false},
-                    a:2,
-                    b:"stg",
-                    c:true,
-                    d:false,
-                    e:undefined,
-                    f:null,
-                    g:Symbol("abc"),
-                    h:cbkTypeOf,
-                    i:22n,
-                   }
-      let set1 = new Setting(lit1,"Setting:deepLiteralTest1")
-      let frontMY1 = set1.getFrontmatterYAML()
-      let renderY1 = set1.getRenderYAML()
-      _.bassert(20,Object.keys(renderY1).length == 0,"no render entries given")
-      _.bassert(21,frontMY1["a"] === 2,"should be as given")
-      _.bassert(22,frontMY1["b"] === "stg","should be as given")
-      _.bassert(23,frontMY1["c"] === true,"should be as given")
-      _.bassert(24,frontMY1["d"] === false,"should be as given")
-      _.bassert(25,frontMY1["e"] === "","Value should be removed, 'undefined' no globalType")
-      _.bassert(26,frontMY1["f"] === "","Value should be removed, 'null' no globalType")
-      _.bassert(27,frontMY1["g"] === "","Value should be removed, 'symbol' no globalType")
-      _.bassert(28,frontMY1["h"] === "","Value should be removed, 'function' no globalType")
-      _.bassert(29,frontMY1["i"] === "","Value should be removed, 'bigint' no globalType")
-
-      }/************************************************************/if(true){
-        let lit2 = { __SPEC: {RENDER: false},
-                    a:[],
-                    b:[1,2,3],
-                    c:[false,false,true],
-                    d:["a"],
-                    e:[undefined],
-                    f:[null],
-                    g:[Symbol("abc")],
-                    h:[cbkTypeOf],
-                    i:[22n],
-                   }
-      let set2 = new Setting(lit2,"Setting:deepLiteralTest2")
-      let frontMY2 = set2.getFrontmatterYAML()
-      let renderY2 = set2.getRenderYAML()
-      _.bassert(30,Object.keys(renderY2).length === 0,"no render entries given")
-      _.bassert(31,Array.isArray(frontMY2.a),"empty array should be returned as array")
-      _.bassert(32,Array.isArray(frontMY2.b),"array of numbers should be returned as array")
-      _.bassert(33,Array.isArray(frontMY2.c),"array of booleans should be returned as array")
-      _.bassert(34,Array.isArray(frontMY2.d),"array of strings should be returned as array")
-      _.bassert(35,areEqual(frontMY2.a,[]),"empty array should be returned as empty array")
-      _.bassert(36,areEqual(frontMY2.b,[1,2,3]),"array of numbers should be returned as same array")
-      _.bassert(37,areEqual(frontMY2.c,[false,false,true]),"array of booleans should be returned as same array")
-      _.bassert(38,areEqual(frontMY2.d,["a"]),"array of strings should be returned as same array")
-      _.bassert(39,frontMY2["e"] === "","Value should be removed, array of 'undefined' no globalType")
-      _.bassert(40,frontMY2["f"] === "","Value should be removed, array of 'null' no globalType")
-      _.bassert(41,frontMY2["g"] === "","Value should be removed, array of 'symbol' no globalType")
-      _.bassert(42,frontMY2["h"] === "","Value should be removed, array of 'function' no globalType")
-      _.bassert(43,frontMY2["i"] === "","Value should be removed, array of 'bigint' no globalType")
-
-      }/************************************************************/if(true){
-        let lit3 = { __SPEC: {RENDER: false,TYPE: "Number"},
-                  a:2,
-                  b:"stg",
-                  c:true,
-                  d:false,
-                  e:undefined,
-                  f:null,
-                  g:Symbol("abc"),
-                  h:cbkTypeOf,
-                  i:22n,
-                }
-      let set3 = new Setting(lit3,"Setting:deepLiteralTest3")
-      let frontMY3 = set3.getFrontmatterYAML()
-      let renderY3 = set3.getRenderYAML()
-      _.bassert(50,Object.keys(renderY3).length == 0,"no render entries given")
-      _.bassert(51,frontMY3["a"] === 2,"should be as given")
-      _.bassert(52,frontMY3["b"] === "stg","should be as given, globalType is used")
-      _.bassert(53,frontMY3["c"] === true,"should be as given, globalType is used")
-      _.bassert(54,frontMY3["d"] === false,"should be as given, globalType is used")
-      _.bassert(55,frontMY3["e"] === "","Value should be removed, 'undefined' no globalType")
-      _.bassert(56,frontMY3["f"] === "","Value should be removed, 'null' no globalType")
-      _.bassert(57,frontMY3["g"] === "","Value should be removed, 'symbol' no globalType")
-      _.bassert(58,frontMY3["h"] === "","Value should be removed, 'function' no globalType")
-      _.bassert(59,frontMY3["i"] === "","Value should be removed, 'bigint' no globalType")
-
-      }/************************************************************/if(true){
-        let lit4 = {  __SPEC: {RENDER: false,TYPE: "Number"},
-                    a:[],
-                    b:[1,2,3],
-                    c:[false,false,true],
-                    d:["a"],
-                    e:[undefined],
-                    f:[null],
-                    g:[Symbol("abc")],
-                    h:[cbkTypeOf],
-                    i:[22n],
-                   }
-      let set4 = new Setting(lit4,"Setting:deepLiteralTest4")
-      let frontMY4 = set4.getFrontmatterYAML()
-      let renderY4 = set4.getRenderYAML()
-      _.bassert(60,Object.keys(renderY4).length === 0,"no render entries given")
-      _.bassert(61,Array.isArray(frontMY4.a),"should be as given, globalType is used")
-      _.bassert(62,Array.isArray(frontMY4.b),"should be as given, globalType is used")
-      _.bassert(63,Array.isArray(frontMY4.c),"should be as given, globalType is used")
-      _.bassert(64,Array.isArray(frontMY4.d),"should be as given, globalType is used")
-      _.bassert(65,areEqual(frontMY4.a,[]),"empty array should be returned as empty array")
-      _.bassert(66,areEqual(frontMY4.b,[1,2,3]),"array of numbers should be returned as same array")
-      _.bassert(67,areEqual(frontMY4.c,[false,false,true]),"array of booleans should be returned as same array")
-      _.bassert(68,areEqual(frontMY4.d,["a"]),"array of strings should be returned as same array")
-      _.bassert(69,frontMY4["e"] === "","Value should be removed, array of 'undefined' no globalType")
-      _.bassert(70,frontMY4["f"] === "","Value should be removed, array of 'null' no globalType")
-      _.bassert(71,frontMY4["g"] === "","Value should be removed, array of 'symbol' no globalType")
-      _.bassert(72,frontMY4["h"] === "","Value should be removed, array of 'function' no globalType")
-      _.bassert(73,frontMY4["i"] === "","Value should be removed, array of 'bigint' no globalType")
-
-      }/************************************************************/if(true){
-        let lit5 = { __SPEC: {RENDER: false,TYPE: "Number"},
-                  a:{__SPEC: true, VALUE:2},
-                  b:{__SPEC: true, VALUE:"stg"},
-                  c:{__SPEC: true, VALUE:true},
-                  d:{__SPEC: true, VALUE:false},
-                  e:{__SPEC: true, VALUE:undefined},
-                  f:{__SPEC: true, VALUE:null},
-                  g:{__SPEC: true, VALUE:Symbol("abc")},
-                  h:{__SPEC: true, VALUE:cbkTypeOf},
-                  i:{__SPEC: true, VALUE:22n},
-                 }
-      let set5 = new Setting(lit5,"Setting:deepLiteralTest5")
-      let frontMY5 = set5.getFrontmatterYAML()
-      let renderY5 = set5.getRenderYAML()
-      _.bassert(80,Object.keys(renderY5).length == 0,"no render entries given")
-      _.bassert(81,frontMY5["a"] === 2,"should be as given")
-      _.bassert(82,frontMY5["b"] === "stg","should be as given, globalType is used")
-      _.bassert(83,frontMY5["c"] === true,"should be as given, globalType is used")
-      _.bassert(84,frontMY5["d"] === false,"should be as given, globalType is used")
-      _.bassert(85,frontMY5["e"] === "","Value should be removed, 'undefined' no globalType")
-      _.bassert(86,frontMY5["f"] === "","Value should be removed, 'null' no globalType")
-      _.bassert(87,frontMY5["g"] === "","Value should be removed, 'symbol' no globalType")
-      _.bassert(88,frontMY5["h"] === "","Value should be removed, 'function' no globalType")
-      _.bassert(89,frontMY5["i"] === "","Value should be removed, 'bigint' no globalType")
-
-      }/************************************************************/if(true){
-        let lit6 = {  __SPEC: {RENDER: false,TYPE: "Number"},
-                    a:{__SPEC: true, VALUE:[]},
-                    b:{__SPEC: true, VALUE:[1,2,3]},
-                    c:{__SPEC: true, VALUE:[false,false,true]},
-                    d:{__SPEC: true, VALUE:["a"]},
-                    e:{__SPEC: true, VALUE:[undefined]},
-                    f:{__SPEC: true, VALUE:[null]},
-                    g:{__SPEC: true, VALUE:[Symbol("abc")]},
-                    h:{__SPEC: true, VALUE:[cbkTypeOf]},
-                    i:{__SPEC: true, VALUE:[22n]},
-                   }
-      let set6 = new Setting(lit6,"Setting:deepLiteralTest6")
-      let frontMY6 = set6.getFrontmatterYAML()
-      let renderY6 = set6.getRenderYAML()
-      _.bassert(90,Object.keys(renderY6).length === 0,"no render entries given")
-      _.bassert(91,Array.isArray(frontMY6.a),"should be as given, globalType is used")
-      _.bassert(92,Array.isArray(frontMY6.b),"should be as given, globalType is used")
-      _.bassert(93,Array.isArray(frontMY6.c),"should be as given, globalType is used")
-      _.bassert(94,Array.isArray(frontMY6.d),"should be as given, globalType is used")
-      _.bassert(95,areEqual(frontMY6.a,[]),"empty array should be returned as empty array")
-      _.bassert(96,areEqual(frontMY6.b,[1,2,3]),"array of numbers should be returned as same array")
-      _.bassert(97,areEqual(frontMY6.c,[false,false,true]),"array of booleans should be returned as same array")
-      _.bassert(98,areEqual(frontMY6.d,["a"]),"array of strings should be returned as same array")
-      _.bassert(99,frontMY6["e"] === "","Value should be removed, array of 'undefined' no globalType")
-      _.bassert(100,frontMY6["f"] === "","Value should be removed, array of 'null' no globalType")
-      _.bassert(101,frontMY6["g"] === "","Value should be removed, array of 'symbol' no globalType")
-      _.bassert(102,frontMY6["h"] === "","Value should be removed, array of 'function' no globalType")
-      _.bassert(103,frontMY6["i"] === "","Value should be removed, array of 'bigint' no globalType")
-
-      }/************************************************************/if(true){
-        let lit7 = { __SPEC: {RENDER: false,TYPE: "Number"},
-                  a:{__SPEC: false, VALUE:2},
-                  b:{__SPEC: false, VALUE:"stg"},
-                  c:{__SPEC: false, VALUE:true},
-                  d:{__SPEC: false, VALUE:false},
-                  e:{__SPEC: false, VALUE:undefined},
-                  f:{__SPEC: false, VALUE:null},
-                  g:{__SPEC: false, VALUE:Symbol("abc")},
-                  h:{__SPEC: false, VALUE:cbkTypeOf},
-                  i:{__SPEC: false, VALUE:22n},
-                 }
-      let set7 = new Setting(lit7,"Setting:deepLiteralTest7")
-      let frontMY7 = set7.getFrontmatterYAML()
-      let renderY7 = set7.getRenderYAML()
-      _.bassert(110,Object.keys(renderY7).length == 0,"no render entries given")
-      _.bassert(111,frontMY7["a"] === 2,"should be as given")
-      _.bassert(112,frontMY7["b"] === "","Value should be removed, globalType is not used")
-      _.bassert(113,frontMY7["c"] === "","Value should be removed, globalType is not used")
-      _.bassert(114,frontMY7["d"] === "","Value should be removed, globalType is not used")
-      _.bassert(115,frontMY7["e"] === "","Value should be removed, 'undefined' no globalType")
-      _.bassert(116,frontMY7["f"] === "","Value should be removed, 'null' no globalType")
-      _.bassert(117,frontMY7["g"] === "","Value should be removed, 'symbol' no globalType")
-      _.bassert(118,frontMY7["h"] === "","Value should be removed, 'function' no globalType")
-      _.bassert(119,frontMY7["i"] === "","Value should be removed, 'bigint' no globalType")
-
-      }/************************************************************/if(true){
-        let lit8 = {  __SPEC: {RENDER: false,TYPE: "Number"},
-                    a:{__SPEC: false, VALUE:[]},
-                    b:{__SPEC: false, VALUE:[1,2,3]},
-                    c:{__SPEC: false, VALUE:[false,false,true]},
-                    d:{__SPEC: false, VALUE:["a"]},
-                    e:{__SPEC: false, VALUE:[undefined]},
-                    f:{__SPEC: false, VALUE:[null]},
-                    g:{__SPEC: false, VALUE:[Symbol("abc")]},
-                    h:{__SPEC: false, VALUE:[cbkTypeOf]},
-                    i:{__SPEC: false, VALUE:[22n]},
-                   }
-      let set8 = new Setting(lit8,"Setting:deepLiteralTest8")
-      let frontMY8 = set8.getFrontmatterYAML()
-      let renderY8 = set8.getRenderYAML()
-      _.bassert(120,Object.keys(renderY8).length === 0,"no render entries given")
-      _.bassert(111,frontMY8["a"] === "","Value should be removed, globalType is not used")
-      _.bassert(112,frontMY8["b"] === "","Value should be removed, globalType is not used")
-      _.bassert(113,frontMY8["c"] === "","Value should be removed, globalType is not used")
-      _.bassert(114,frontMY8["d"] === "","Value should be removed, globalType is not used")
-      _.bassert(115,frontMY8["e"] === "","Value should be removed, 'undefined' no globalType")
-      _.bassert(116,frontMY8["f"] === "","Value should be removed, 'null' no globalType")
-      _.bassert(117,frontMY8["g"] === "","Value should be removed, 'symbol' no globalType")
-      _.bassert(118,frontMY8["h"] === "","Value should be removed, 'function' no globalType")
-      _.bassert(119,frontMY8["i"] === "","Value should be removed, 'bigint' no globalType")
-
-      }/**********************************************************************/
-    }
-    function _tryConstruct(arg1, arg2, arg3) {
-      new Setting(arg1, arg2, arg3)
-    }
-  }
-}
-registeredTests.push(Setting.test)
-registeredExceptions.push(
-  "new Setting({},'goodN', new BreadCrumbs({},'root'))",
-  "new Setting()"
-)
-
-//  #region workers
-class GeneralWorker extends Setting {
-  static #KEY =  GENERAL_WORKER_KEY // "SECTION_GENERAL"
-  static #localType =  GENERAL_TYPE // "(Number|String|Boolean)"
-
-  /**
-   * Key which this worker will handle
-   * @type {String}
-   */
-  static get workerKey() {
-    return GeneralWorker.#KEY
-  }
-
-  /**
-   * @classdesc For note types
-   * @extends Setting
-   * @constructor
-   * @description
-   *
-   * Creates a GeneralWorker instance
-   * @extends Setting
-   * @param {Object} literal
-   * @param {String} key
-   * @param {Setting} parent
-   */
-  constructor(literal, key, parent) {
-    parent.workersTypeForChildren = GeneralWorker.#localType
-    super(literal, key, parent)
-    this.addGene(GeneralWorker)
-    // literal {(Object)} checked by superclass
-    // key {(String|Symbol)} checked by superclass
-    // parent {(Undefined|Setting)} checked by superclass
-    this.throwIfUndefined(parent, "parent")
-    this.throwIfUndefined(key, "key")
-  }
-
-  /**
-   * Returns value of {@link key} or {@link fallback} as caller fallback
-   * or undefined if none of them is found
-   *
-   * @param {String} key
-   * @param  {...any} fallback
-   * @returns {...any}
-   */
-  getValue(key, fallback) {
-    let atom = this.at(key)
+const SECTION_TRANSLATE = { // specialization
+  _$_specialName: 'SECTION_TRANSLATE',
+  valueOf: function (path, lang = DEFAULT_LANGUAGE, fallback) {
+    let result = this._$_valueOf(path + '.VALUE')
     let value
-    if( atom !== undefined) {
-      value = atom.VALUE
-    } else {
-      value = fallback
-    }
-    return value
-  }
-
-  //prettier-ignore
-  static test(outputObj) { // GeneralWorker
-    let _ = null
-    if(_ = new TestSuite("GeneralWorker", outputObj)) {
-      _.run(constructorTest)
-      _.run(isATest)
-      _.run(toDisplayStringTest)
-      _.run(getValueTest)
-      _.destruct()
-      _ = null
-    }
-    function constructorTest() {
-      let un
-      let b = new BreadCrumbs(un, "GeneralWorker:constructorTest", un)
-      let dlgMan0 = new GeneralWorker({}, "GeneralWorker:constructorTest1", new Setting({},"parent"))
-      _.assert(1,_tryConstruct,{},"GeneralWorker:cTest1",new Setting({},"parent"),"should be created, all parameters ok")
-      _.shouldAssert(2,_tryConstruct,un,"GeneralWorker:cTest2",new Setting({},"parent"),"should not be created, literal is undefined")
-      _.shouldAssert(3,_tryConstruct,22,"GeneralWorker:cTest3",new Setting({},"parent"),"should not be created, literal is number")
-      _.shouldAssert(4,_tryConstruct,"literal","GeneralWorker:cTest4",new Setting({},"parent"),"should not be created, literal is string")
-      _.shouldAssert(5,_tryConstruct,null,"GeneralWorker:cTest5",new Setting({},"parent"),"should not be created, literal is null")
-      _.shouldAssert(6,_tryConstruct,{},un,new Setting({},"parent"),"should not be created, key is undefined")
-      _.shouldAssert(7,_tryConstruct,{},22,new Setting({},"parent"),"should not be created, key is number")
-      _.shouldAssert(8,_tryConstruct,{},{},new Setting({},"parent"),"should not be created, key is object")
-      _.shouldAssert(9,_tryConstruct,{},b,new Setting({},"parent"),"should not be created, key is Object")
-      _.assert(10,_tryConstruct,{},Symbol("a"),new Setting({},"parent"),"should be created, key is Symbol")
-      _.shouldAssert(11,_tryConstruct,{},"GeneralWorker:cTest11",un,"should  not be created, undefined parent is not ok")
-      _.shouldAssert(12,_tryConstruct,{},"GeneralWorker:cTest12",new Error(),"should not be be created, parent is Error")
-      _.shouldAssert(13,_tryConstruct,{},"GeneralWorker:cTest13",{},"should not be be created, parent is object")
-      _.shouldAssert(14,_tryConstruct,{},"GeneralWorker:cTest14","ring","should not be be created, parent is string")
-      _.shouldAssert(15,_tryConstruct,{},"GeneralWorker:cTest15",22,"should not be be created, parent is number")
-      _.shouldAssert(16,_tryConstruct,{},"GeneralWorker:cTest16",null,"should not be be created, parent is null")
-      _.shouldAssert(16,_tryConstruct,{},"GeneralWorker:cTest16",b,"should not be be created, parent is BreadCrumbs")
-      let dlgMan = new GeneralWorker({},"GeneralWorker:constructorTest101", new Setting({},"parent"))
-      _.bassert(101,dlgMan instanceof Object,"'GeneralWorker' has to be an instance of 'Object'")
-      _.bassert(102,dlgMan instanceof BreadCrumbs,"'GeneralWorker' has to be an instance of 'BreadCrumbs'")
-      _.bassert(103,dlgMan instanceof GeneralWorker,"'GeneralWorker' has to be an instance of 'GeneralWorker'")
-      _.bassert(104,dlgMan.constructor === GeneralWorker,"the constructor property is not 'GeneralWorker'")
-    }
-    function isATest() {
-      // Object, Gene, GenePool, AEssence added for each AEssence instance
-      // BreadCrumbs added for each BreadCrumbs instance
-      // "undefined", "null", "boolean", "number", "bigint", "string", "symbol",
-      // "function", "object", "array" added for each BreadCrumbs instance
-      // GeneralWorker added for each GeneralWorker instance
-      let dlgMan1 = new GeneralWorker({},"GeneralWorker:NameIsATest",new Setting({},"parent"))
-      _.bassert(1,dlgMan1.isA(dlgMan1,"object"), "'" + dlgMan1 + "' should be a " + "object")
-      _.bassert(2,dlgMan1.isA(dlgMan1,Object), "'" + dlgMan1 + "' should be a " + "Object")
-      _.bassert(3,dlgMan1.isA(dlgMan1,BreadCrumbs), "'" + dlgMan1 + "' should be a " + "BreadCrumbs")
-      _.bassert(4,dlgMan1.isA(dlgMan1,Setting), "'" + dlgMan1 + "' should be a " + "Setting")
-      _.bassert(5,dlgMan1.isA(dlgMan1,GeneralWorker), "'" + dlgMan1 + "' should be a " + "GeneralWorker")
-      _.bassert(6,!dlgMan1.isA(dlgMan1,Error), "'" + dlgMan1 + "' should not be a " + "Error")
-      _.bassert(7,!dlgMan1.isA(dlgMan1,Gene), "'" + dlgMan1 + "' should not be a " + "Gene")
-    }
-    function toDisplayStringTest() {
-      let dlgMan1 = new GeneralWorker({},"DlgWrk:toDisplayStringTest1",new Setting({},"parent"))
-      _.bassert(1,dlgMan1.toDisplayString().includes("toDisplayStringTest1"),"result does not contain name string"    )
-      _.bassert(2,dlgMan1.toDisplayString().includes("GeneralWorker"),"result does not contain class string"    )
-    }
-    function getValueTest() {
-      let un
-      let par = new Setting({},"GeneralWorker:getValueTest:parent")
-      /**********************************************************************/{
-      let lit = {LANGUAGE:"abcd"}
-      let gen = new GeneralWorker(lit,"GeneralWorker:getValueTest1",par)
-      let val = gen.getValue("LANGUAGE")
-      _.bassert(1,areEqual(val,"abcd"),"get the LANGUAGE value via GeneralWorker")
-      let litS = { SECTION_GENERAL:{LANGUAGE:"abcd"}}
-      let set = new Setting(litS)
-      let valS = set.getValue("SECTION_GENERAL.LANGUAGE")
-      _.bassert(2,areEqual(valS,"abcd"),"get the LANGUAGE value via Setting")
-      }/**********************************************************************/{
-      let lit = {NOLANGUAGE:"abcd"}
-      let gen = new GeneralWorker(lit,"GeneralWorker:getValueTest11",par)
-      let val = gen.getValue("LANGUAGE",FALLBACK_LANGUAGE)
-      _.bassert(11,areEqual(val,FALLBACK_LANGUAGE),"get the hardcoded LANGUAGE value via GeneralWorker")
-      let litS = { SECTION_GENERAL:{NOLANGUAGE:"abcd"}}
-      let set = new Setting(litS)
-      let valS = set.getValue("SECTION_GENERAL.LANGUAGE", FALLBACK_LANGUAGE)
-      _.bassert(12,areEqual(valS,FALLBACK_LANGUAGE),"get the hardcoded LANGAUGE value via Setting")
-      }/**********************************************************************/{
-      let lit = {NOLANGUAGE:"abcd"}
-      let gen = new GeneralWorker(lit,"GeneralWorker:getValueTest21",par)
-      let val = gen.getValue("LANGUAGE","ced")
-      _.bassert(21,areEqual(val,"ced"),"get the fallback LANGUAGE value via GeneralWorker")
-      let litS = { SECTION_GENERAL:{NOLANGUAGE:"abcd"}}
-      let set = new Setting(litS)
-      let valS = set.getValue("SECTION_GENERAL.LANGUAGE","ced")
-      _.bassert(22,areEqual(valS,"ced"),"get the fallback LANGAUGE value via Setting")
-      }/**********************************************************************/{
-      let lit = {LANGUAGE:"abcd"}
-      let gen = new GeneralWorker(lit,"GeneralWorker:getValueTest31",par)
-      let val = gen.getValue("notthere")
-      _.bassert(31,areEqual(val,un),"get value for non existing key via GeneralWorker")
-      let litS = { SECTION_GENERAL:{LANGUAGE:"abcd"}}
-      let set = new Setting(litS)
-      let valS = set.getValue("SECTION_GENERAL.notthere",)
-      _.bassert(32,areEqual(valS,un),"get value for non existing key via Setting")
-      }/**********************************************************************/{
-      }/**********************************************************************/
-    }
-
-    function _tryConstruct(arg1, arg2,arg3) {
-      new GeneralWorker(arg1,arg2,arg3)
-    }
-  }
-}
-Setting.worker = GeneralWorker
-registeredTests.push(GeneralWorker.test)
-registeredExceptions.push(
-  "new GeneralWorker({},'goodName', undefined)",
-  "new GeneralWorker({},undefined, new Setting({},'parent'))"
-)
-
-class LocalizationWorker extends Setting {
-  static #KEY =  LOCALIZATION_WORKER_KEY //  "SECTION_TRANSLATE"
-  static #localType =  LOCALIZATION_TYPE // "(String|Array.<String>|Array.<Array.<String>>)"
-  #defaultLang = FALLBACK_LANGUAGE
-  /** Key which this worker will handle
-   * @type {String}
-   */
-  static get workerKey() {
-    return LocalizationWorker.#KEY
-  }
-  /**
-   * @type {String}
-   * @param {String} lang
-   */
-  set defaultLang(lang) {
-    if (typeof lang == "string") this.#defaultLang = lang
-  }
-
-  /**
-   * @classdesc For translation
-   * @extends Setting
-   * @constructor
-   * @description
-   * Creates a LocalizationWorker instance
-   * @param {Object} literal
-   * @param {String} key
-   * @param {Setting} parent
-   */
-  constructor(literal, key, parent) {
-    parent.workersTypeForChildren = LocalizationWorker.#localType
-    super(literal, key, parent)
-    this.addGene(LocalizationWorker)
-    // literal {(Object)} checked by superclass
-    // key {(String|Symbol)} checked by superclass
-    // parent {(Undefined|Setting)} checked by superclass
-    this.throwIfUndefined(parent, "parent")
-    this.throwIfUndefined(key, "key")
-    if(this.root.at(GENERAL_WORKER_KEY) != undefined)
-      this.#defaultLang = this.root.at(GENERAL_WORKER_KEY).getValue("LANGUAGE", FALLBACK_LANGUAGE)
-  }
-
-  /**
-   * Returns translated value or value or undefined if {@link key}
-   * not found
-   *
-   * The value can be:<br>
-   * - a string<br>
-   * - an array of two strings<br>
-   * - an array of arrays of two strings
-   *
-   * If the value is a string, this is returned
-   *
-   * From a plain array of string the 2nd string is returned.
-   *
-   * The 1st string in a two string array is considered as the language
-   * key. If it is equal with language string in {@link params} the 2nd
-   * string of this pair is returned. <br>
-   * If no match is found, the value for the default language is returned.<br>
-   * If this is not found, the 2nd value of the first pair is returned.
-   * @example
-   * // returns "word"
-   * let lit =  { SECTION_TRANSLATE: {
-   *             word: [ ["de", "Wort"], ["en", "word"] ]
-   * }          }
-   * let set = new Setting(lit)
-   * set.getValue("SECTION_TRANSLATE.word", "en")
-   * @example
-   * // returns "word", if "en" is default language
-   * let lit =  { SECTION_TRANSLATE: {
-   *            word: [ ["de", "Wort"], ["en", "word"] ]
-   * }          }
-   * let set = new Setting(lit)
-   * set.getValue("SECTION_TRANSLATE.word", "nl")
-   * @example
-   * // returns "Auto"
-   * let lit ={  SECTION_TRANSLATE: {
-   *            car: ["de", "Auto"],
-   * }         }
-   * let set = new Setting(lit)
-   * set.getValue("SECTION_TRANSLATE.car", "nl")
-   * @param {String} key
-   * @param {String} fallback
-   * @param {String} language - if other langauge string than #defaultLang
-   * @returns {String}
-   */
-  getValue(key, fallbackIn, language) {
-    let atom = this.at(key)
-    if (atom != undefined  && Array.isArray(atom.VALUE)) {
-      let lang = language == undefined ? this.#defaultLang : language
-      let fallback = fallbackIn
-      for (const langPair of atom.VALUE) {
-        if (Array.isArray(langPair) && langPair.length > 1) {
-          if (langPair[0] == lang) {
-            return langPair[1]
+    const defaultLang = DEFAULT_LANGUAGE
+    if (Array.isArray(result)) {
+      if (result.length && !Array.isArray(result[0])) {
+        if (result[0] === lang) {
+          value = result[1]
+        } else if (result[0] === defaultLang && fallback === undefined) {
+          fallback = result[1]
+        }
+        if (fallback === undefined) {
+          fallback = result[1]
+        }
+      } else {
+        for (const langPair of result) {
+          if (langPair[0] === lang) {
+            value = langPair[1]
+            break
           }
-          if (fallback == undefined) fallback = langPair[1]
-          if (langPair[0] == this.#defaultLang)
+          if (langPair[0] === defaultLang && fallback === undefined) {
             fallback = langPair[1]
-        } else break
-      }
-      if (fallback != undefined) return fallback
-      if (atom.VALUE.length > 1) return atom.VALUE[1]
-    }
-    if (atom != undefined) return atom.VALUE
-  }
-  //prettier-ignore
-  static test(outputObj) { // LocalizationWorker
-    let _ = null
-    if(_ = new TestSuite("LocalizationWorker", outputObj)) {
-      _.run(constructorTest)
-      _.run(isATest)
-      _.run(toDisplayStringTest)
-      _.run(getValueTest)
-      _.destruct()
-      _ = null
-    }
-    function constructorTest() {
-      let un
-      let b = new BreadCrumbs(un, "LocalizationWorker:constructorTest", un)
-      let lm = new LocalizationWorker({}, "LocalizationWorker:constructorTest1", new Setting({},"LocalizationWorker:cTest0:parent"))
-      _.assert(1,_tryConstruct,{},"LocalizationWorker:cTest1",new Setting({},"LocalizationWorker:cTest1:parent"),"should be created, all parameters ok")
-      _.shouldAssert(2,_tryConstruct,un,"LocalizationWorker:cTest2",new Setting({},"LocalizationWorker:cTest2:parent"),"should not be created, literal is undefined")
-      _.shouldAssert(3,_tryConstruct,22,"LocalizationWorker:cTest3",new Setting({},"LocalizationWorker:cTest3:parent"),"should not be created, literal is number")
-      _.shouldAssert(4,_tryConstruct,"literal","LocalizationWorker:cTest4",new Setting({},"LocalizationWorker:cTest4:parent"),"should not be created, literal is string")
-      _.shouldAssert(5,_tryConstruct,null,"LocalizationWorker:cTest5",new Setting({},"LocalizationWorker:cTest5:parent"),"should not be created, literal is null")
-      _.shouldAssert(6,_tryConstruct,{},un,new Setting({},"LocalizationWorker:wrong1:parent"),"should not be created, key is undefined")
-      _.shouldAssert(7,_tryConstruct,{},22,new Setting({},"LocalizationWorker:wrong2:parent"),"should not be created, key is number")
-      _.shouldAssert(8,_tryConstruct,{},{},new Setting({},"LocalizationWorker:wrong3:parent"),"should not be created, key is object")
-      _.shouldAssert(9,_tryConstruct,{},b,new Setting({},"LocalizationWorker:wrong4:parent"),"should not be created, key is Object")
-      _.assert(10,_tryConstruct,{},Symbol("a"),new Setting({},"LocalizationWorker:sym1:parent"),"should be created, key is Symbol")
-      _.shouldAssert(11,_tryConstruct,{},"LocalizationWorker:cTest11",un,"should  not be created, undefined parent is not ok")
-      _.shouldAssert(12,_tryConstruct,{},"LocalizationWorker:cTest12",new Error(),"should not be be created, parent is Error")
-      _.shouldAssert(13,_tryConstruct,{},"LocalizationWorker:cTest13",{},"should not be be created, parent is object")
-      _.shouldAssert(14,_tryConstruct,{},"LocalizationWorker:cTest14","ring","should not be be created, parent is string")
-      _.shouldAssert(15,_tryConstruct,{},"LocalizationWorker:cTest15",22,"should not be be created, parent is number")
-      _.shouldAssert(16,_tryConstruct,{},"LocalizationWorker:cTest16",null,"should not be be created, parent is null")
-      _.shouldAssert(16,_tryConstruct,{},"LocalizationWorker:cTest16",b,"should not be be created, parent is BreadCrumbs")
-      let locMan = new LocalizationWorker({},"LocalizationWorker:constructorTest101", new Setting({},"LocalizationWorker:101:parent"))
-      _.bassert(101,locMan instanceof Object,"'LocalizationWorker' has to be an instance of 'Object'")
-      _.bassert(102,locMan instanceof BreadCrumbs,"'LocalizationWorker' has to be an instance of 'BreadCrumbs'")
-      _.bassert(103,locMan instanceof LocalizationWorker,"'LocalizationWorker' has to be an instance of 'LocalizationWorker'")
-      _.bassert(104,locMan.constructor === LocalizationWorker,"the constructor property is not 'LocalizationWorker'")
-    }
-    function isATest() {
-      // Object, Gene, GenePool, AEssence added for each AEssence instance
-      // BreadCrumbs added for each BreadCrumbs instance
-      // "undefined", "null", "boolean", "number", "bigint", "string", "symbol",
-      // "function", "object", "array" added for each BreadCrumbs instance
-      // LocalizationWorker added for each LocalizationWorker instance
-      let locMan1 = new LocalizationWorker({},"LocalizationWorker:NameIsATest",new Setting({},"parent"))
-      _.bassert(1,locMan1.isA(locMan1,"object"), "'" + locMan1 + "' should be a " + "object")
-      _.bassert(2,locMan1.isA(locMan1,Object), "'" + locMan1 + "' should be a " + "Object")
-      _.bassert(3,locMan1.isA(locMan1,BreadCrumbs), "'" + locMan1 + "' should be a " + "BreadCrumbs")
-      _.bassert(4,locMan1.isA(locMan1,Setting), "'" + locMan1 + "' should be a " + "Setting")
-      _.bassert(5,locMan1.isA(locMan1,LocalizationWorker), "'" + locMan1 + "' should be a " + "LocalizationWorker")
-      _.bassert(6,!locMan1.isA(locMan1,Error), "'" + locMan1 + "' should not be a " + "Error")
-      _.bassert(7,!locMan1.isA(locMan1,Gene), "'" + locMan1 + "' should not be a " + "Gene")
-    }
-    function toDisplayStringTest() {
-      let locMan1 = new LocalizationWorker({},"LocWork:toDisplayStringTest1",new Setting({},"parent"))
-      _.bassert(1,locMan1.toDisplayString().includes("toDisplayStringTest1"),"result does not contain name string"    )
-      _.bassert(2,locMan1.toDisplayString().includes("LocalizationWorker"),"result does not contain class string"    )
-    }
-    function getValueTest() {
-      let par = new Setting({},"LocalizationWorker:getValueTest:parent")
-      /**********************************************************************/{
-      let lit = {word: "Wort"}
-      let loc = new LocalizationWorker(lit,"LocalizationWorker:getValueTest1",par)
-      let val = loc.getValue("word")
-      _.bassert(1,val == "Wort","get the value via DialogWorker")
-      let litS = { SECTION_TRANSLATE:{word: "Wort"}}
-      let set = new Setting(litS,"LocalizationWorker:getValueTest12",par)
-      let valS = set.getValue("SECTION_TRANSLATE.word")
-      _.bassert(2,valS == "Wort","get the value via Setting")
-      }/**********************************************************************/{
-      let lit = { chapter: {word: "Wort"}}
-      let loc = new LocalizationWorker(lit,"LocalizationWorker:getValueTest11",par)
-      let val = loc.getValue("chapter.word")
-      _.bassert(11,val == "Wort","get the value via Setting")
-      let litS = { SECTION_TRANSLATE:{chapter: {word: "Wort"}}}
-      let set = new Setting(litS,"DialogWorker:getValueTest12",par)
-      let valS = set.getValue("SECTION_TRANSLATE.chapter.word")
-      _.bassert(12,valS == "Wort","get the value via Setting")
-      }/**********************************************************************/{
-      let lit = {word: ["de","Wort"]}
-      let loc = new LocalizationWorker(lit,"LocalizationWorker:getValueTest1",par)
-      let val = loc.getValue("word")
-      _.bassert(21,areEqual(val,"Wort"),"get the value via DialogWorker")
-      let litS = { SECTION_TRANSLATE:{word: ["de","Wort"]}}
-      let set = new Setting(litS,"LocalizationWorker:getValueTest12",par)
-      let valS = set.getValue("SECTION_TRANSLATE.word")
-      _.bassert(22,areEqual(valS,"Wort"),"get the value via Setting")
-      }/**********************************************************************/{
-      let lit = { chapter: {word: ["de","Wort"]}}
-      let loc = new LocalizationWorker(lit,"LocalizationWorker:getValueTest11",par)
-      let val = loc.getValue("chapter.word")
-      _.bassert(31,areEqual(val,"Wort"),"get the value via Setting")
-      let litS = { SECTION_TRANSLATE:{chapter: {word: ["de","Wort"]}}}
-      let set = new Setting(litS,"DialogWorker:getValueTest12",par)
-      let valS = set.getValue("SECTION_TRANSLATE.chapter.word")
-      _.bassert(32,areEqual(valS,"Wort"),"get the value via Setting")
-      }/**********************************************************************/
-      let lit = { word: "Wort",
-                  coffee: ["de","Kaffee"],
-                  tree: [["en","tree"],["fr","arbre"],["es","botavara"],["de","Baum"]],
-                  notThere: ["some","use","less","words"],
-                  noLang: [["some","1"],["use","2"],["less","3"],["words","4"]],
-                }
-      let loc = new LocalizationWorker(lit,"LocalizationWorker:getValueTest40",par)
-      loc.defaultLang = "de"
-      let val1 = loc.getValue("word")
-      let val2 = loc.getValue("coffee")
-      let val3 = loc.getValue("tree")
-      let val4 = loc.getValue("notThere")
-      let val5 = loc.getValue("noLang")
-      let expAnsw1 = "Wort"
-      let expAnsw2 = "Kaffee"
-      let expAnsw3 = "Baum"
-      let expAnsw4 = "use"
-      let expAnsw5 = "1"
-      _.bassert(41,val1==expAnsw1,"no language given")
-      _.bassert(42,val2==expAnsw2,"no language given")
-      _.bassert(43,val3==expAnsw3,"no language given")
-      _.bassert(44,val4==expAnsw4,"no language given")
-      _.bassert(45,val5==expAnsw5,"no language given")
-      val1 = loc.getValue("word","de")
-      val2 = loc.getValue("coffee","de")
-      val3 = loc.getValue("tree","de")
-      val4 = loc.getValue("notThere","de")
-      val5 = loc.getValue("noLang","de")
-      expAnsw1 = "Wort"
-      expAnsw2 = "de"
-      expAnsw3 = "Baum"
-      expAnsw4 = "de"
-      expAnsw5 = "de"
-      _.bassert(51,val1==expAnsw1,"de")
-      _.bassert(52,val2==expAnsw2,"de")
-      _.bassert(53,val3==expAnsw3,"de")
-      _.bassert(54,val4==expAnsw4,"de")
-      _.bassert(55,val5==expAnsw5,"de")
-
-      val1 = loc.getValue("word","nl")
-      val2 = loc.getValue("coffee","nl")
-      val3 = loc.getValue("tree","nl")
-      val4 = loc.getValue("notThere","nl")
-      val5 = loc.getValue("noLang","nl")
-      expAnsw1 = "Wort"
-      expAnsw2 = "nl"
-      expAnsw3 = "Baum"
-      expAnsw4 = "nl"
-      expAnsw5 = "nl"
-      _.bassert(61,val1==expAnsw1,"language 'nl' not found")
-      _.bassert(62,val2==expAnsw2,"language 'nl' not found")
-      _.bassert(63,val3==expAnsw3,"language 'nl' not found")
-      _.bassert(64,val4==expAnsw4,"language 'nl' not found")
-      _.bassert(65,val5==expAnsw5,"language 'nl' not found")
-
-      let litS = { SECTION_TRANSLATE:lit}
-      let set = new Setting(litS,"DialogWorker:getValueTest12",par)
-      val1 = set.getValue("SECTION_TRANSLATE.word","de")
-      val2 = set.getValue("SECTION_TRANSLATE.coffee","de")
-      val3 = set.getValue("SECTION_TRANSLATE.tree","de")
-      val4 = set.getValue("SECTION_TRANSLATE.notThere","de")
-      val5 = set.getValue("SECTION_TRANSLATE.noLang","de")
-      expAnsw1 = "Wort"
-      expAnsw2 = "de"
-      expAnsw3 = "tree"
-      expAnsw4 = "de"
-      expAnsw5 = "de"
-      _.bassert(71,val1==expAnsw1,"de")
-      _.bassert(72,val2==expAnsw2,"de")
-      _.bassert(73,val3==expAnsw3,"de")
-      _.bassert(74,val4==expAnsw4,"de")
-      _.bassert(75,val5==expAnsw5,"de")
-
-      }/**********************************************************************/{
-      }
-
-    function _tryConstruct(arg1, arg2,arg3) {
-      new LocalizationWorker(arg1,arg2,arg3)
-    }
-  }
-}
-Setting.worker = LocalizationWorker
-registeredTests.push(LocalizationWorker.test)
-registeredExceptions.push(
-  "new LocalizationWorker({},'goodName', undefined)",
-  "new LocalizationWorker({},undefined, new Setting({},'parent'))"
-)
-
-class DialogWorker extends Setting {
-  static #KEY = DIALOG_WORKER_KEY // "SECTION_DIALOG"
-  static #localType =  DIALOG_TYPE // "(Number|Boolean|Array.<Number>|Array.<Boolean>)"
-  /**
-   * Key which this worker will handle
-   * @type {String}
-   */
-  static get workerKey() {
-    return DialogWorker.#KEY
-  }
-  /**
-   * @classdesc For note types
-   * @extends Setting
-   * @constructor
-   * @description
-   *
-   * Creates a DialogWorker instance
-   * @extends Setting
-   * @param {Object} literal
-   * @param {String} key
-   * @param {Setting} parent
-   */
-  constructor(literal, key, parent) {
-    parent.workersTypeForChildren = DialogWorker.#localType
-    super(literal, key, parent)
-    this.addGene(DialogWorker)
-    // literal {(Object)} checked by superclass
-    // key {(String|Symbol)} checked by superclass
-    // parent {(Undefined|Setting)} checked by superclass
-    this.throwIfUndefined(parent, "parent")
-    this.throwIfUndefined(key, "key")
-  }
-
-  //prettier-ignore
-  static test(outputObj) { // DialogWorker
-    let _ = null
-    if(_ = new TestSuite("DialogWorker", outputObj)) {
-      _.run(constructorTest)
-      _.run(isATest)
-      _.run(toDisplayStringTest)
-      _.run(getValueTest)
-      _.destruct()
-      _ = null
-    }
-    function constructorTest() {
-      let un
-      let b = new BreadCrumbs(un, "DialogWorker:constructorTest", un)
-      let dlgMan0 = new DialogWorker({}, "DialogWorker:constructorTest1", new Setting({},"parent"))
-      _.assert(1,_tryConstruct,{},"DialogWorker:cTest1",new Setting({},"parent"),"should be created, all parameters ok")
-      _.shouldAssert(2,_tryConstruct,un,"DialogWorker:cTest2",new Setting({},"parent"),"should not be created, literal is undefined")
-      _.shouldAssert(3,_tryConstruct,22,"DialogWorker:cTest3",new Setting({},"parent"),"should not be created, literal is number")
-      _.shouldAssert(4,_tryConstruct,"literal","DialogWorker:cTest4",new Setting({},"parent"),"should not be created, literal is string")
-      _.shouldAssert(5,_tryConstruct,null,"DialogWorker:cTest5",new Setting({},"parent"),"should not be created, literal is null")
-      _.shouldAssert(6,_tryConstruct,{},un,new Setting({},"parent"),"should not be created, key is undefined")
-      _.shouldAssert(7,_tryConstruct,{},22,new Setting({},"parent"),"should not be created, key is number")
-      _.shouldAssert(8,_tryConstruct,{},{},new Setting({},"parent"),"should not be created, key is object")
-      _.shouldAssert(9,_tryConstruct,{},b,new Setting({},"parent"),"should not be created, key is Object")
-      _.assert(10,_tryConstruct,{},Symbol("a"),new Setting({},"parent"),"should be created, key is Symbol")
-      _.shouldAssert(11,_tryConstruct,{},"DialogWorker:cTest11",un,"should  not be created, undefined parent is not ok")
-      _.shouldAssert(12,_tryConstruct,{},"DialogWorker:cTest12",new Error(),"should not be be created, parent is Error")
-      _.shouldAssert(13,_tryConstruct,{},"DialogWorker:cTest13",{},"should not be be created, parent is object")
-      _.shouldAssert(14,_tryConstruct,{},"DialogWorker:cTest14","ring","should not be be created, parent is string")
-      _.shouldAssert(15,_tryConstruct,{},"DialogWorker:cTest15",22,"should not be be created, parent is number")
-      _.shouldAssert(16,_tryConstruct,{},"DialogWorker:cTest16",null,"should not be be created, parent is null")
-      _.shouldAssert(16,_tryConstruct,{},"DialogWorker:cTest16",b,"should not be be created, parent is BreadCrumbs")
-      let dlgMan = new DialogWorker({},"DialogWorker:constructorTest101", new Setting({},"parent"))
-      _.bassert(101,dlgMan instanceof Object,"'DialogWorker' has to be an instance of 'Object'")
-      _.bassert(102,dlgMan instanceof BreadCrumbs,"'DialogWorker' has to be an instance of 'BreadCrumbs'")
-      _.bassert(103,dlgMan instanceof DialogWorker,"'DialogWorker' has to be an instance of 'DialogWorker'")
-      _.bassert(104,dlgMan.constructor === DialogWorker,"the constructor property is not 'DialogWorker'")
-    }
-    function isATest() {
-      // Object, Gene, GenePool, AEssence added for each AEssence instance
-      // BreadCrumbs added for each BreadCrumbs instance
-      // "undefined", "null", "boolean", "number", "bigint", "string", "symbol",
-      // "function", "object", "array" added for each BreadCrumbs instance
-      // DialogWorker added for each DialogWorker instance
-      let dlgMan1 = new DialogWorker({},"DialogWorker:NameIsATest",new Setting({},"parent"))
-      _.bassert(1,dlgMan1.isA(dlgMan1,"object"), "'" + dlgMan1 + "' should be a " + "object")
-      _.bassert(2,dlgMan1.isA(dlgMan1,Object), "'" + dlgMan1 + "' should be a " + "Object")
-      _.bassert(3,dlgMan1.isA(dlgMan1,BreadCrumbs), "'" + dlgMan1 + "' should be a " + "BreadCrumbs")
-      _.bassert(4,dlgMan1.isA(dlgMan1,Setting), "'" + dlgMan1 + "' should be a " + "Setting")
-      _.bassert(5,dlgMan1.isA(dlgMan1,DialogWorker), "'" + dlgMan1 + "' should be a " + "DialogWorker")
-      _.bassert(6,!dlgMan1.isA(dlgMan1,Error), "'" + dlgMan1 + "' should not be a " + "Error")
-      _.bassert(7,!dlgMan1.isA(dlgMan1,Gene), "'" + dlgMan1 + "' should not be a " + "Gene")
-    }
-    function toDisplayStringTest() {
-      let dlgMan1 = new DialogWorker({},"DlgWrk:toDisplayStringTest1",new Setting({},"parent"))
-      _.bassert(1,dlgMan1.toDisplayString().includes("toDisplayStringTest1"),"result does not contain name string"    )
-      _.bassert(2,dlgMan1.toDisplayString().includes("DialogWorker"),"result does not contain class string"    )
-    }
-    function getValueTest() {
-      let par = new Setting({},"DialogWorker:getValueTest:parent")
-      /**********************************************************************/{
-      let lit = {pos:22}
-      let dlg = new DialogWorker(lit,"DialogWorker:getValueTest1",par)
-      let val = dlg.getValue("pos")
-      _.bassert(1,val == 22,"get the value via DialogWorker")
-      let litS = { SECTION_DIALOG:{pos:22}}
-      let set = new Setting(litS,"DialogWorker:getValueTest12",par)
-      let valS = set.getValue("SECTION_DIALOG.pos")
-      _.bassert(2,valS == 22,"get the value via Setting")
-      }/**********************************************************************/{
-      let lit = { line: {pos:22}}
-      let dlg = new DialogWorker(lit,"DialogWorker:getValueTest11",par)
-      let val = dlg.getValue("line.pos")
-      _.bassert(11,val == 22,"get the value via Setting")
-      let litS = { SECTION_DIALOG:{line: {pos:22}}}
-      let set = new Setting(litS,"DialogWorker:getValueTest12",par)
-      let valS = set.getValue("SECTION_DIALOG.line.pos")
-      _.bassert(12,valS == 22,"get the value via Setting")
-      }/**********************************************************************/{
-      let lit = {pos:[22,14]}
-      let dlg = new DialogWorker(lit,"DialogWorker:getValueTest1",par)
-      let val = dlg.getValue("pos")
-      _.bassert(21,areEqual(val,[22,14]),"get the value via DialogWorker")
-      let litS = { SECTION_DIALOG:{pos:[22,14]}}
-      let set = new Setting(litS,"DialogWorker:getValueTest12",par)
-      let valS = set.getValue("SECTION_DIALOG.pos")
-      _.bassert(22,areEqual(valS,[22,14]),"get the value via Setting")
-      }/**********************************************************************/{
-      let lit = { line: {pos:[22,14]}}
-      let dlg = new DialogWorker(lit,"DialogWorker:getValueTest11",par)
-      let val = dlg.getValue("line.pos")
-      _.bassert(31,areEqual(val,[22,14]),"get the value via Setting")
-      let litS = { SECTION_DIALOG:{line: {pos:[22,14]}}}
-      let set = new Setting(litS,"DialogWorker:getValueTest12",par)
-      let valS = set.getValue("SECTION_DIALOG.line.pos")
-      _.bassert(32,areEqual(valS,[22,14]),"get the value via Setting")
-      }/**********************************************************************/{
-      }/**********************************************************************/
-    }
-
-    function _tryConstruct(arg1, arg2,arg3) {
-      new DialogWorker(arg1,arg2,arg3)
-    }
-  }
-}
-Setting.worker = DialogWorker
-registeredTests.push(DialogWorker.test)
-registeredExceptions.push(
-  "new DialogWorker({},'goodName', undefined)",
-  "new DialogWorker({},undefined, new Setting({},'parent'))"
-)
-
-class TypesWorker extends Setting {
-  static #KEY = TYPES_WORKER_KEY // "SECTION_NOTETYPES"
-  static #localType = TYPES_TYPE  // "(Number|String|Boolean|Array.<Number>|Array.<String>|Array.<Boolean>|Function)"
-  /** Key which this worker will handle
-   * @type {String}
-   */
-  static get workerKey() {
-    return TypesWorker.#KEY
-  }
-  static #plainStaticString = ""
-  #plainString = ""
-
-  /**
-   * @classdesc For note types
-   * @extends Setting
-   * @constructor
-   * @description
-   * Creates a TypesWorker instance
-   * @param {Object} literal
-   * @param {String} key
-   * @param {Setting} parent
-   */
-  constructor(literal, key, parent) {
-    if (LOG_ESSENCE_CONSTRUCTOR_2_CONSOLE) {
-      let name_x =
-        key === undefined
-          ? "undefined"
-          : typeof key == "symbol"
-          ? "_Symbol_" + GLOBAL_SYMBOL_COUNTER++
-          : key
-      let literal_x =
-        literal === undefined
-          ? "undefined"
-          : literal === null
-          ? "Null"
-          : false
-          ? JSON.stringify(literal, null, 4)
-          : flatten(literal)
-      let specLit_x =
-        literal != undefined ? flatten(literal[AEssence.SPEC_KEY]) : "undefined"
-      if (parent == undefined)
-        aut(
-          `========================================================================================`,
-          pink
-        )
-      aut(
-        `========================================================================================`,
-        pink
-      )
-      aut(
-        `START TypesWorker ======  ${name_x}  =======\n   SPEC: ${specLit_x}\n   Literal :${literal_x}`,
-        pink
-      )
-    }
-    parent.workersTypeForChildren = TypesWorker.#localType
-    TypesWorker.#toPlainString(literal)
-    TypesWorker.#cpRepeatedDefaults(literal)
-    super(literal, key, parent)
-    this.#plainString = TypesWorker.#plainStaticString
-    TypesWorker.#plainStaticString = ""
-    this.addGene(TypesWorker)
-    // literal {(Object)} checked by superclass
-    // key {(String|Symbol)} checked by superclass
-    // parent {(Undefined|Setting)} checked by superclass
-    this.throwIfUndefined(parent, "parent")
-    this.throwIfUndefined(key, "key")
-    if (LOG_ESSENCE_CONSTRUCTOR_2_CONSOLE) {
-      let name_x =
-        this.name === undefined
-          ? "undefined"
-          : typeof this.name == "symbol"
-          ? "_Symbol_" + GLOBAL_SYMBOL_COUNTER++
-          : this.name
-      let literal_x =
-        this.literal === undefined
-          ? "undefined"
-          : this.literal === null
-          ? "Null"
-          : false
-          ? JSON.stringify(this.literal, null, 4)
-          : flatten(this.literal)
-      let specLit_x =
-        this.literal != undefined
-          ? flatten(this.literal[AEssence.SPEC_KEY])
-          : "undefined"
-      aut(
-        `   SPEC: ${specLit_x}\n   Literal :${literal_x}\nENDE TypesWorker ===\
-===  ${name_x}  =========================================================`,
-        pink
-      )
-    }
-  }
-  static #toPlainString(literal, indent="\n  ") {
-    let indentToUse=indent
-    for (const [key, value] of Object.entries(literal)) {
-      if(key == AEssence.SPEC_KEY) {
-        indentToUse=" "
-      }
-      TypesWorker.#plainStaticString += indentToUse + key + ": "
-      if (typeof value != "object" ||
-          Object.getOwnPropertyNames(value).length === 0 ||
-          Array.isArray(value)) {
-        TypesWorker.#plainStaticString += Setting.valueString(value)
-      } else {
-        TypesWorker.#plainStaticString += "{"
-        TypesWorker.#toPlainString(value, indentToUse+"  ")
-        TypesWorker.#plainStaticString += indentToUse + "}"
-      }
-      TypesWorker.#plainStaticString += ","
-      if(key == AEssence.SPEC_KEY) {
-        indentToUse=indent
-      }
-    }
-  }
-  static #cpRepeatedDefaults(literal) {
-    if (typeof literal != "object" || literal == null) return
-    let defaults
-    let defaultskey
-    for (const [key, value] of Object.entries(literal)) {
-      if(value[AEssence.SPEC_KEY] != undefined &&
-        value[AEssence.SPEC_KEY].REPEAT == true &&
-        value[AEssence.SPEC_KEY].IGNORE != true ) {
-        defaults = value
-        defaultskey = key
-        value[AEssence.SPEC_KEY].REPEAT = undefined
-        break;
-      }
-    }
-    if (defaults != undefined) {
-      for (const [key, value] of Object.entries(literal)) {
-        if (key == AEssence.SPEC_KEY || key == defaultskey) continue
-        for (const [defkey, defvalue] of Object.entries(defaults)) {
-          TypesWorker.#deepCopy(defvalue, value, defkey, key,0)
-        }
-      }
-      delete literal[defaultskey]
-    }
-  }
-  static #deepCopy(what, to, name, toname, depth) {
-    if(typeof what != "object") {
-      if(to[name] === undefined) {
-        to[name] = what
-      }
-    } else if(typeof what[AEssence.SPEC_KEY] == "boolean") {
-      if(to[name] === undefined) {
-        to[name] = {}
-        let defaultval
-        for (const [newkey, newvalue] of Object.entries(what)) {
-          to[name][newkey]=newvalue
-          if(newkey === "DEFAULT") {
-            defaultval = newvalue
           }
         }
-        if(to[name]["VALUE"] === undefined) {
-          to[name]["VALUE"]=defaultval
+        if (fallback === undefined && result.length) {
+          fallback = result[0][1]
         }
-        to[name][AEssence.SPEC_KEY]=true
       }
+      value = value ?? fallback
     } else {
-      if(to[name] === undefined) {
-        to[name] = {}
-      }
-      for (const [whatkey, whatvalue] of Object.entries(what)) {
-        TypesWorker.#deepCopy(whatvalue, to[name], whatkey, name, depth+1)
-      }
-  }
-  }
-  toPlainString(indent) {
-    return this.#plainString
-  }
-  /**
-   * Returns value of {@link key} or {@link fallback} as caller fallback
-   * or undefined if none of them is found
-   *
-   * @param {String} key
-   * @param  {...any} fallback
-   * @returns {...any}
-   */
-  getValue(key, fallback) {
-    let atom = this.at(key)
-    let value
-    if( atom !== undefined) {
-      value = atom.VALUE
-    } else {
-      value = fallback
+      result = this._$_valueOf(path)
+      value = result ? result.toString() : fallback ?? ''
     }
     return value
-  }
+  },
 
-  //prettier-ignore
-  static test(outputObj) { // TypesWorker
-    let _ = null
-    if(_ = new TestSuite("TypesWorker", outputObj)) {
-      _.run(constructorTest)
-      _.run(isATest)
-      _.run(toDisplayStringTest)
-      _.run(getValueTest)
-      _.destruct()
-      _ = null
-    }
-    function constructorTest() {
-      let un
-      let b = new BreadCrumbs(un, "TypesWorker:constructorTest", un)
-      let typesMan0 = new TypesWorker({}, "TypesWorker:constructorTest1", new Setting({},"parent"))
-      _.assert(1,_tryConstruct,{},"TypesWorker:cTest1",new Setting({},"parent"),"should be created, all parameters ok")
-      _.shouldAssert(2,_tryConstruct,un,"TypesWorker:cTest2",new Setting({},"parent"),"should not be created, literal is undefined")
-      _.shouldAssert(3,_tryConstruct,22,"TypesWorker:cTest3",new Setting({},"parent"),"should not be created, literal is number")
-      _.shouldAssert(4,_tryConstruct,"literal","TypesWorker:cTest4",new Setting({},"parent"),"should not be created, literal is string")
-      _.shouldAssert(5,_tryConstruct,null,"TypesWorker:cTest5",new Setting({},"parent"),"should not be created, literal is null")
-      _.shouldAssert(6,_tryConstruct,{},un,new Setting({},"parent"),"should not be created, key is undefined")
-      _.shouldAssert(7,_tryConstruct,{},22,new Setting({},"parent"),"should not be created, key is number")
-      _.shouldAssert(8,_tryConstruct,{},{},new Setting({},"parent"),"should not be created, key is object")
-      _.shouldAssert(9,_tryConstruct,{},b,new Setting({},"parent"),"should not be created, key is Object")
-      _.assert(10,_tryConstruct,{},Symbol("a"),new Setting({},"parent"),"should be created, key is Symbol")
-      _.shouldAssert(11,_tryConstruct,{},"TypesWorker:cTest11",un,"should  not be created, undefined parent is not ok")
-      _.shouldAssert(12,_tryConstruct,{},"TypesWorker:cTest12",new Error(),"should not be be created, parent is Error")
-      _.shouldAssert(13,_tryConstruct,{},"TypesWorker:cTest13",{},"should not be be created, parent is object")
-      _.shouldAssert(14,_tryConstruct,{},"TypesWorker:cTest14","ring","should not be be created, parent is string")
-      _.shouldAssert(15,_tryConstruct,{},"TypesWorker:cTest15",22,"should not be be created, parent is number")
-      _.shouldAssert(16,_tryConstruct,{},"TypesWorker:cTest16",null,"should not be be created, parent is null")
-      _.shouldAssert(16,_tryConstruct,{},"TypesWorker:cTest16",b,"should not be be created, parent is BreadCrumbs")
-      let typesMan = new TypesWorker({},"TypesWorker:constructorTest101", new Setting({},"parent"))
-      _.bassert(101,typesMan instanceof Object,"'TypesWorker' has to be an instance of 'Object'")
-      _.bassert(102,typesMan instanceof BreadCrumbs,"'TypesWorker' has to be an instance of 'BreadCrumbs'")
-      _.bassert(103,typesMan instanceof TypesWorker,"'TypesWorker' has to be an instance of 'TypesWorker'")
-      _.bassert(104,typesMan.constructor === TypesWorker,"the constructor property is not 'TypesWorker'")
-    }
-    function isATest() {
-      // Object, Gene, GenePool, AEssence added for each AEssence instance
-      // BreadCrumbs added for each BreadCrumbs instance
-      // "undefined", "null", "boolean", "number", "bigint", "string", "symbol",
-      // "function", "object", "array" added for each BreadCrumbs instance
-      // TypesWorker added for each TypesWorker instance
-      let typesMan1 = new TypesWorker({},"TypesWorker:NameIsATest",new Setting({},"parent"))
-      _.bassert(1,typesMan1.isA(typesMan1,"object"), "'" + typesMan1 + "' should be a " + "object")
-      _.bassert(2,typesMan1.isA(typesMan1,Object), "'" + typesMan1 + "' should be a " + "Object")
-      _.bassert(3,typesMan1.isA(typesMan1,BreadCrumbs), "'" + typesMan1 + "' should be a " + "BreadCrumbs")
-      _.bassert(4,typesMan1.isA(typesMan1,Setting), "'" + typesMan1 + "' should be a " + "Setting")
-      _.bassert(5,typesMan1.isA(typesMan1,TypesWorker), "'" + typesMan1 + "' should be a " + "TypesWorker")
-      _.bassert(6,!typesMan1.isA(typesMan1,Error), "'" + typesMan1 + "' should not be a " + "Error")
-      _.bassert(7,!typesMan1.isA(typesMan1,Gene), "'" + typesMan1 + "' should not be a " + "Gene")
-    }
-    function toDisplayStringTest() {
-      let typesMan1 = new TypesWorker({},"TypMan:toDisplayStringTest1",new Setting({},"parent"))
-      _.bassert(1,typesMan1.toDisplayString().includes("toDisplayStringTest1"),"result does not contain name string"    )
-      _.bassert(2,typesMan1.toDisplayString().includes("TypesWorker"),"result does not contain class string"    )
-    }
-    function getValueTest() {
-      let par = new Setting({},"TypesWorker:getValueTest:parent")
-      /**********************************************************************/{
-      let lit = { __SPEC: {REPEAT: true, },  section: {pos:22}}
-      let typ = new TypesWorker(lit,"TypesWorker:getValueTest1",par)
-      let val = typ.getValue("section.pos")
-      _.bassert(1,val == 22,"get the value via TypesWorker")
-      let litS = { SECTION_NOTETYPES:{__SPEC: {REPEAT: true, },  section: {pos:22}}}
-      let set = new Setting(litS,"TypesWorker:getValueTest12",par)
-      let valS = set.getValue("SECTION_NOTETYPES.section.pos")
-      _.bassert(2,valS == 22,"get the value via Setting")
-      }/**********************************************************************/{
-      let lit = { __SPEC: {REPEAT: true, },  section: {line: {pos:22}}}
-      let typ = new TypesWorker(lit,"TypesWorker:getValueTest11",par)
-      let val = typ.getValue("section.line.pos")
-      _.bassert(11,val == 22,"get the value via Setting")
-      let litS = { SECTION_NOTETYPES:{__SPEC: {REPEAT: true, },  section: {line: {pos:22}}}}
-      let set = new Setting(litS,"TypesWorker:getValueTest12",par)
-      let valS = set.getValue("SECTION_NOTETYPES.section.line.pos")
-      _.bassert(12,valS == 22,"get the value via Setting")
-      }/**********************************************************************/{
-      let lit = { __SPEC: {REPEAT: true, },  section: {pos:[22,14]}}
-      let typ = new TypesWorker(lit,"TypesWorker:getValueTest1",par)
-      let val = typ.getValue("section.pos")
-      _.bassert(21,areEqual(val,[22,14]),"get the value via TypesWorker")
-      let litS = { SECTION_NOTETYPES:{__SPEC: {REPEAT: true, },  section: {pos:[22,14]}}}
-      let set = new Setting(litS,"TypesWorker:getValueTest12",par)
-      let valS = set.getValue("SECTION_NOTETYPES.section.pos")
-      _.bassert(22,areEqual(valS,[22,14]),"get the value via Setting")
-      }/**********************************************************************/{
-      let lit = { __SPEC: {REPEAT: true, },  section: {line: {pos:[22,14]}}}
-      let typ = new TypesWorker(lit,"TypesWorker:getValueTest11",par)
-      let val = typ.getValue("section.line.pos")
-      _.bassert(31,areEqual(val,[22,14]),"get the value via Setting")
-      let litS = { SECTION_NOTETYPES:{__SPEC: {REPEAT: true, },  section: {line: {pos:[22,14]}}}}
-      let set = new Setting(litS,"TypesWorker:getValueTest12",par)
-      let valS = set.getValue("SECTION_NOTETYPES.section.line.pos")
-      _.bassert(32,areEqual(valS,[22,14]),"get the value via Setting")
-      }/**********************************************************************/
-    }
-
-    function _tryConstruct(arg1, arg2,arg3) {
-      new TypesWorker(arg1,arg2,arg3)
-    }
-  }
 }
-Setting.worker = TypesWorker
-registeredTests.push(TypesWorker.test)
-registeredExceptions.push(
-  "new TypesWorker({},'goodName', undefined)",
-  "new TypesWorker({},undefined, new Setting({},'parent'))"
-)
-//  #endregion workers
-//#endregion central code classes
-//#region Templater
-/**
- * @classdesc Error used for User cancelling
- * @extends external:Error
+const SECTION_DIALOG = { // specialization
+  _$_specialName: 'SECTION_DIALOG',
+}
+const SECTION_NOTETYPES = { // specialization
+  _$_specialName: 'SECTION_NOTETYPES',
+  showEntries: function () {
+    const spaces = ' '.repeat(7)
+    console.log(`${spaces}Name: ${this._$_instance.name}`)
+    for (const key of Object.keys(this)) {
+      if (!key.startsWith('_$_')) {
+        console.log(`${spaces}${key}`)
+      }
+    }
+  },
+  returnHello: function () {
+    let result = 'hello OVERRIDEN: ' + this._$_instance.name
+    result += ' ' + Object.keys(arguments).map(([k]) => k)
+    const proto = Object.getPrototypeOf(this)
+    result += ' | ' + proto._$_returnHello.apply(this, arguments)
+    result += ' | ' + proto._$_returnHello.call(this, 'a', 'b')
+    return result
+  },
+}
+const specializations = {
+  SECTION_GENERAL,
+  SECTION_TRANSLATE,
+  SECTION_DIALOG,
+  SECTION_NOTETYPES,
+}
+
+/** section
+ * There is no constructor. Instances are created from literal.
+ *
+ * Wegen @hideconstructor wird kein Constructor dokumentiert.
+ * @class
+ * @hideconstructor
+ *
+ * @classdesc
+ * A single section, which will have a specialization
+ *
+ * Es gibt keinen Constructor, und doch ist das Ganze eine Klasse. Die Objekte
+ * werden nicht mit new erzeugt. Die Instanzen werden über Literale beim Lesen
+ * des Javascript Scripts erzeugt und dieses Object `section` wird ihnen über den
+ * Prototype-Setter '__proto__' als Prototyp zugewiesen.
+ *
+ * Um es unwahrscheinlicher zu machen, dass Eigenschaften des Literals
+ * Eigenschaften dieses Prototypes überschreiben, beginnen dessen Eigenschaften
+ * mit dem Kenner '_$_'.
+ *
+ * Da es von der Syntax her keine Klasse ist, können private member nicht mit
+ * einem Doppelkreuz gekennzeichnet werden. Private Eigenschaften beginnen mit
+ * dem Kenner '_$_'
+ *
+ * @mermaid
+ * ---
+ * config:
+ *   theme: base
+ *   layout: elk
+ *   class:
+ *     hideEmptyMembersBox: true
+ * ---
+ *  classDiagram
+ *      class Object:::extern
+ *      class section
+ *      link Object "https://developer.mozilla.org/de/docs/Web/JavaScript/Reference/Global_Objects/"
+ *      section <|--Object
+ *      classDef default fill:#0D5E4E,color:#e6ffe6, stroke:xxx, stroke-width:2px
+ *      classDef extern fill:#bababa
+ * @alias module:foty~section
+ * @augments external:Object
  */
-class DialogError extends Error {
-  constructor(message, ...params) {
-    super(message, ...params)
-    this.name = "DialogError"
-  }
-  toString() {
-    return " °°" + this.constructor.name + " " + this.name
-  }
+const section =
+/** @lends module:foty~section.prototype */
+{
+  _$_protoName: 'section',
+  _$_instance: false,
+
+  /** section.throwIfNotusable: Throws an error if proto is not usable.
+   *
+   * Jede öffentliche Methode dieser Klasse ruft diese Methode als erstes auf,
+   * um zu garantieren, dass mit der Ausführung fortgefahren werden kann.
+   * Wenn die Instanz nicht initialisiert ist oder wenn das Literal nicht
+   * korrekt war, löst diese Methode eine Ausnahme in Form eines
+   * [FotyError]{@link module-foty.FotyError.html}s aus.
+   * @param {?function} callingFunction - function, which throws the error
+   * @param {...*} args - Arguments of `callingFunction`
+   * @private
+   * @throws [InitializationError]{@link module:foty~InitializationError}
+   * setting is not initalized
+   * @throws [LiteralError]{@link module:foty~LiteralError}
+   * literal has wrong format
+   */
+  _$_throwIfNotUsable: function (callingFunction, ...args) {
+    let error
+    const callingFunctionArgs = args.join(', ')
+    if (!this._$_instance) {
+      error = new InitializationError(this, callingFunction, callingFunctionArgs,
+        'Zugriff vor Initialisierung'
+      )
+    } else if (!this._$_instance.specialization) {
+      error = new LiteralError(this, callingFunction, callingFunctionArgs,
+        'specialization ist nicht vorhanden'
+      )
+    }
+    if (error) {
+      throw (error)
+    }
+  },
+
+  /** section.init: initializes from literal before first use.
+   *
+   * Diese Funktion macht nichts, falls das Objekt bereits initialisiert ist.
+   *
+   * Ansonsten sucht sie die namensgleiche spezialisation und weist sie zu.
+   * Falls keine spezialisation gefunden wird, wird eine Ausnahme ausgelöst.
+   * @param {string} name - name of section
+   * @throws [LiteralError]{@link module:foty~LiteralError}
+   * literal has wrong format
+   */
+  _$_deepCopy: function (parent, name, src) {
+    if (typeof src === 'object') {
+      if (parent[name] === undefined) parent[name] = {}
+      for (const [key, value] of Object.entries(src)) {
+        section._$_deepCopy(parent[name], key, value)
+      }
+    } else {
+      if (parent[name] === undefined) parent[name] = src
+    }
+  },
+  _$_init: function (name) {
+    if (this._$_instance) return
+    const spec = specializations[name]
+    if (!spec) {
+      throw (new LiteralError(
+        this, this._$_init, Array.prototype.join.call(arguments, ', '),
+        'Es kann kein section specialization für ' + name + ' gefunden werden'
+      ))
+    }
+    let repeatedDefaults
+    for (const [key, value] of Object.entries(this)) {
+      if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        continue
+      }
+      if (value.REPEAT) {
+        delete value.REPEAT
+        if (!repeatedDefaults) {
+          repeatedDefaults = value
+          delete this[key]
+          continue
+        }
+      }
+      // Laut Spezifikation wird das REPEAT Objekt nur für die nachfolgenden
+      // verwendet
+      if (repeatedDefaults) {
+        for (const [defkey, defvalue] of Object.entries(repeatedDefaults)) {
+          section._$_deepCopy(value, defkey, defvalue)
+        }
+      }
+    }
+    const stack = [{ obj: this, path: '', }]
+    while (stack.length > 0) {
+      const current = stack.pop()
+      if (!current.obj[Symbol.iterator]) {
+        Object.defineProperty(  // add property (non enumarable)
+          current.obj, Symbol.iterator, { value: this.generator }
+        )
+      }
+      if (!current.obj._$_PATH) {
+        Object.defineProperty( // add property (non enumarable)
+          current.obj, '_$_PATH', { value: current.path.slice(1) }
+        )
+      }
+      if (!current.obj._$_valueOfDescendants) {
+        Object.defineProperty( // add property (non enumarable)
+          current.obj, 'valueOf', { value: this._$_valueOfDescendants }
+        )
+      }
+      for (const [key, value] of Object.entries(current.obj)) {
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+          const obj = { obj: value, path: current.path + '.' + key, }
+          stack.push(obj)
+        }
+      }
+    }
+    Object.defineProperty( // add property (non enumarable)
+      this, '_$_instance', { value: { } }
+    )
+    this._$_instance.specialization = specializations[name]
+    this._$_instance.name = name
+  },
+
+  /** section.generator* iterates */
+  generator: function * () {
+    // return this._$_generator()
+    const entries = Object.entries(this)
+    let index = 0
+    while (index < entries.length) {
+      const [key, value] = entries[index++]
+      if (key.startsWith('_$_')) {
+        ;
+      } else if (typeof value === 'object' && value !== null && value.IGNORE) {
+        ;
+      } else {
+        // console.log('ITERATOR: ' + key)
+        // console.log(value)
+        yield { key, test: index, path: value._$_PATH }
+      }
+    }
+  },
+
+  /** section._$_ decorates */
+  _$_: function (fu) {
+    if (this._$_throwIfNotUsable) this._$_throwIfNotUsable(fu)
+    return Object.hasOwn(this._$_instance.specialization, fu.name)
+      ? this._$_instance.specialization[fu.name].apply(this, arguments[1])
+      : this['_$_' + fu.name].apply(this, arguments[1])
+  },
+
+  /** section.showEntries: logs section to console
+   *
+   * gibt die Section auf die Konsole aus. Es werden der Name der Sektion
+   * ausgegeben und alle Schlüssel, die nicht zum Prototyp gehören.
+   * @throws [InitializationError]{@link module:foty~InitializationError}
+   * setting is not initalized
+   */
+  showEntries: function () { return this._$_(this.showEntries, arguments) },
+  _$_showEntries: function () {
+    const spaces = '.'.repeat(7)
+    console.log(`${spaces}Name: ${this._$_instance.name}`)
+    for (const key of Object.keys(this)) {
+      if (!key.startsWith('_$_')) {
+        console.log(`${spaces}${key}`)
+      }
+    }
+  },
+
+  /** section.collectIf: returns obj with all keyToCollect == expected values */
+  collectIf: function () { return this._$_(this.collectIf, arguments) },
+  _$_collectIf: function (part, keyToCollect, expected) {
+    const collection = {}
+    for (const [key, value] of Object.entries(part)) {
+      if (value.VALUE !== undefined && value.DEFAULT === undefined) {
+        if (!value.IGNORE &&
+          value[keyToCollect] !== undefined &&
+          value[keyToCollect] === expected) {
+          collection[key] = value.VALUE
+        }
+      } else {
+        if (typeof value === 'object' && value !== null) {
+          Object.assign(collection, this.collectIf(value, keyToCollect, expected))
+        }
+      }
+    }
+    return collection
+  },
+
+  /** section.getFrontmatterYAML: returns obj with all RENDER == false values */
+  getFrontmatterYAML: function () { return this._$_(this.getFrontmatterYAML, arguments) },
+  _$_getFrontmatterYAML: function (path) {
+    const part = Object.keys(arguments).length ? this._$_at(path) : this._$_at()
+    const frontmatterYAML = this._$_collectIf(part, 'RENDER', false)
+    return frontmatterYAML
+  },
+
+  /** section.getRenderYAML: returns obj with all RENDER == true values */
+  getRenderYAML: function () { return this._$_(this.getRenderYAML, arguments) },
+  _$_getRenderYAML: function (path) {
+    const part = Object.keys(arguments).length ? this._$_at(path) : this._$_at()
+    const renderYAML = this._$_collectIf(part, 'RENDER', true)
+    return renderYAML
+  },
+
+  /** section.at: returns obj at path */
+  at: function () { return this._$_(this.at, arguments) },
+  _$_at: function (path) {
+    let part = this
+    // Ohne Argumente: this
+    // Fall Argument String: Objekt am Argument als Pfad oder undefined
+    // Sonst Argument
+    if (Object.keys(arguments).length) {
+      if (typeof path === 'string') {
+        const pathparts = path.split('.')
+        for (let i = 0; i < pathparts.length; i++) {
+          if (typeof part === 'object' && part !== null) {
+            part = part[pathparts[i]]
+          } else {
+            part = undefined
+            break
+          }
+        }
+      } else {
+        part = path
+      }
+    }
+    return part
+  },
+
+  /** section.valueOf: returns VALUE or value */
+  valueOf: function () { return this._$_(this.valueOf, arguments) },
+  _$_valueOf: function (path, defaultValue) {
+    const result = Object.keys(arguments).length ? this._$_at(path) : this._$_at()
+    let ign = false
+    let value = result
+    if (typeof result === 'object' && result !== null) {
+      ign = result.IGNORE ?? false
+      value = result.DEFAULT
+      if (typeof result.VALUE !== 'undefined') {
+        value = result.VALUE
+      }
+      if (typeof value === 'undefined') {
+        value = result
+      }
+    }
+    if (typeof value === 'undefined') {
+      value = defaultValue
+    }
+    return ign ? null : value
+  },
+  _$_valueOfDescendants: function (key, defVal) {
+    return this[key] ?? defVal
+  },
+
+  /** section.returnHello: returns string, used for testing specializations */
+  returnHello: function () { return this._$_(this.returnHello, arguments) },
+  _$_returnHello: function () {
+    let result = 'hello FROM PROTO: ' + this._$_instance.name
+    result += ' ' + Object.keys(arguments).map(([k]) => k)
+    return result
+  },
 }
 
+class DialogError extends Error {
+  constructor (message, ...params) {
+    super(message, ...params)
+    this.name = 'DialogError'
+  }
+
+  toString () {
+    return ' °°' + this.constructor.name + ' ' + this.name
+  }
+}
+/** Templater
+ * @classdesc connects configuration and Obsidian templater
+ *
+ * Diese Klasse verbindet die Konfiguration mit dem templater. Sie führt alle
+ * Aktionen aus, den den Templater involvieren.
+ *
+ * @description Creates a Templater instance
+ * @mermaid
+ * ---
+ * config:
+ *   theme: base
+ *   layout: elk
+ *   class:
+ *     hideEmptyMembersBox: true
+ * ---
+ *  classDiagram
+ *      class Object:::extern
+ *      link Object "https://developer.mozilla.org/de/docs/Web/JavaScript/Reference/Global_Objects/Object"
+ *      Templater <|-- Object
+ *      classDef default fill:#0D5E4E,color:#e6ffe6, stroke:xxx, stroke-width:2px
+ *      classDef extern fill:#bababa
+ * @alias module:foty.Templater
+ * @augments external:Object
+*/
 class Templater {
   #tp
   #app
-  #gen //general cfg     // LANGUAGE
-  #loc //translation cfg // TITLE_NEW_FILE TYPE_PROMPT NAME_PROMPT
-  #dlg //dlg cfg         // TYPE_MAX_ENTRIES
-  #typ //notetyps cfg    // DEFAULT
-
-  #cfgname // current notes type name  - only set after done some work
-  #cfg //current notes type cfg - only set after done some work
-  #cfgComputedValues={} // title_date_function can add properties to this
-
-  #isNew=false
-  #filetitle // Name of file (with marker and name_end)
+  #gen
+  #loc
+  #dlg
+  #typ
+  #initialized = false
+  #fileTitle // Name of file (with marker and name_end)
   #notename  // Name of note (without marker and name_end)
-
-  get notetype() {return this.#cfgname}
-
-  constructor(setting, tp, app) {
-    this.#tp = tp
-    this.#app = app
-    this.#gen = setting.at(GENERAL_WORKER_KEY)
-    this.#loc = setting.at(LOCALIZATION_WORKER_KEY)
-    this.#dlg = setting.at(DIALOG_WORKER_KEY)
-    this.#typ = setting.at(TYPES_WORKER_KEY)
-    if(this.#gen == undefined) 
-      this.#gen = new GeneralWorker({},GENERAL_WORKER_KEY, setting)
-    if(this.#loc == undefined) 
-      this.#loc = new LocalizationWorker({},LOCALIZATION_WORKER_KEY, setting)
-    if(this.#dlg == undefined) 
-      this.#dlg = new DialogWorker({},DIALOG_WORKER_KEY, setting)
-    if(this.#typ == undefined) 
-      this.#typ = new TypesWorker({},TYPES_WORKER_KEY, setting)
-    this.#filetitle = this.#tp.file.title
+  #isNewNote
+  #obsidianLanguage
+  #cfgName
+  #cfg
+  #cfgComputedValues
+  get notetype () {
+    return this.#cfgName
   }
 
-  async doTheWork() {
-    try {
-      this.#checkIsNewNote()
+  /** Templater.constructor
+   * @param {configuration} setting - the
+   * [configuration]{@link module:foty~configuration} literal to use
+   * @param {templater} tp - the [templater]{@link external:tsemplater} api
+   * @param {app} app - the obsidian [app]{@link external:app} class
+   */
+  constructor (setting, tp, app) {
+    const proto = Object.getPrototypeOf(userConfiguration)
+    if (proto !== configuration) {
+      throw (new LiteralError(
+        this, this.constructor, Array.prototype.join.call(arguments, ', '),
+        'Das erste Argument ist kein gültiges configuration literal'
+      ))
+    }
+    if (!tp || !tp.date || !tp.file || !tp.system) {
+      throw (new InitializationError(
+        this, this.constructor, Array.prototype.join.call(arguments, ', '),
+        'Das zweite Argument ist keine templater API '
+      ))
+    }
+    if (!app || !app.workspace || !app.vault || !app.fileManager) {
+      throw (new InitializationError(
+        this, this.constructor, Array.prototype.join.call(arguments, ', '),
+        'Das dritte Argument ist keine Obsidian API '
+      ))
+    }
+    setting._$_init()
+    this.#tp = tp
+    this.#app = app
+    this.#gen = setting._$_section('SECTION_GENERAL')
+    this.#loc = setting._$_section('SECTION_TRANSLATE')
+    this.#dlg = setting._$_section('SECTION_DIALOG')
+    this.#typ = setting._$_section('SECTION_NOTETYPES')
+  }
+
+  #initialize () {
+    if (this.#initialized) {
+      return
+    }
+    this.#fileTitle = this.#tp.file.title
+    let lang = null
+    if (typeof window !== 'undefined') { // running in obsidian or browser
+      // https://forum.obsidian.md/t/a-way-to-get-obsidian-s-currently-set-language/17829/5
+      lang = window.localStorage.getItem('language')
+    }
+    this.#obsidianLanguage = lang ?? DEFAULT_LANGUAGE
+    this.#initialized = true
+  }
+
+  /** Templater:test To test private functions
+   */
+  async test (funa) {
+    if (funa === 'isInit') {
+      return this.#initialized
+    } else if (funa === 'init') {
+      this.#initialize()
+      return {
+        tp: this.#tp,
+        app: this.#app,
+        gen: this.#gen,
+        loc: this.#loc,
+        dlg: this.#dlg,
+        typ: this.#typ,
+        initialized: this.#initialized
+      }
+    } else if (funa === 'isNewNote') {
+      return this.#isNewNote
+    } else if (funa === 'fileTitle') {
+      return this.#fileTitle
+    } else if (funa === 'cfgName') {
+      return this.#cfgName
+    } else if (funa === 'cfg') {
+      return this.#cfg
+    } else if (funa === 'notename') {
+      return this.#notename
+    } else if (funa === 'computeIsNewNote') {
+      this.#initialize()
+      this.#computeIsNewNote()
+      return this.#isNewNote
+    } else if (funa === 'findType') {
+      this.#initialize()
+      this.#computeIsNewNote()
+      await this.#findType()
+      return [this.#cfgName, this.#cfg]
+    } else if (funa === 'findName') {
+      this.#initialize()
+      this.#computeIsNewNote()
+      await this.#findType()
+      await this.#findName()
+      return this.#notename
+    } else if (funa === 'rename') {
+      this.#initialize()
+      this.#computeIsNewNote()
       await this.#findType()
       await this.#findName()
       await this.#rename()
-    } catch(e) {
-      throw e
+    } else if (funa === 'defaultTypeName') {
+      this.#initialize()
+      this.#computeIsNewNote()
+      return this.#_$_defaultTypeName()
+    } else if (funa === 'typesFromFolder') {
+      this.#initialize()
+      this.#computeIsNewNote()
+      this.#_$_defaultTypeName()
+      return this.#_$_typesFromFolder()
+    } else if (funa === 'typesFromMarker') {
+      this.#initialize()
+      this.#computeIsNewNote()
+      this.#_$_defaultTypeName()
+      const [folderTypes, withoutFolderTypes] = this.#_$_typesFromFolder()
+      const markerTypes = this.#_$_typesFromMarker(folderTypes, withoutFolderTypes)
+      return markerTypes
     }
   }
-  applyFunctions(vals) {
-    for (let [key, value] of Object.entries(vals)) {
-      if(typeof value == "function") {
-        vals[key]=value(this.#notename, this.#cfgname, this.#cfg,
-                        this.#tp, this.#app, this.#cfgComputedValues)
-      }
-    }
-  }
-  #checkIsNewNote() {
-    let answer = false
-    let lang_array = [FALLBACK_LANGUAGE]
-    let new_titles_array = []
-    let lang = this.#gen.getValue("LANGUAGE", FALLBACK_LANGUAGE)
-    if(0 != lang.localeCompare(FALLBACK_LANGUAGE)) {
-      lang_array.push(lang)
-    }
-    lang_array.forEach((lang) => {
-      let title = this.#loc.getValue("TITLE_NEW_FILE","", lang)
-      if(title == undefined) title = "Untitled"
-      if(title.length > 0) {
-        new_titles_array.push(title)
-      }
-    })
-    new_titles_array.some(prefix => {
-      this.#isNew = this.#filetitle.startsWith(prefix) ? true : false
-      return this.#isNew
-    });
-  }
-  async #findType() {
-    let types_f = []
-    let types_m = []
-    let types_wrong_folder = []
-    function typesFromFolder(me) {
-      // Diary: {folders: ["Diary", "temp"]},
-      // Garten: {folders: ["Garten", "temp"]},
-      // in temp: show Select Dialog Garten, Diary
-      // Obsidian: {folders: ["Obsidian"]},
-      // Unbedacht: {folders: ["Unbedacht"]},
-      // in Obsidian/Unbedacht: create Unbedacht
-      // in Obsidian/temp: show Select Dialog Garten, Diary
 
-      let noteWithPath = me.#tp.file.path(true)
-      let pathParts = noteWithPath.split("\\")
-      if(pathParts.length < 2) {
-        pathParts = noteWithPath.split("/")
-      }
-      pathParts.pop()
-      let depthArr=[]
-      for (const [key, value] of me.#typ) {
-        let folders = me.#typ.getValue(key+".folders")
-        if(folders == undefined) continue
-        if(typeof folders == "string") {
-          let f = String(folders)
-          folders = [f]
-        }
-        let containssubpaths = folders.some(f => {
-          let hasdelimiter = f.includes("\\")
-          if(!hasdelimiter) {
-            hasdelimiter = f.includes("/")
-          }
-          return hasdelimiter
-        })
-        let depth=0
-        let answer = false
-        if(containssubpaths) {
-          // folders with subpaths have higher priority
-          // more subpaths have higher priority
-          folders.some(folder => {
-            let factor = 0
-            let idx = -1
-            if(folder.includes("\\") || folder.includes("/")) {
-              idx = noteWithPath.lastIndexOf(folder)
-              factor = (folder.match(/\//g) || []).length
-              if(factor == 0) {
-                factor = (folder.match(/\\/g) || []).length
-              }
-            }
-            if(idx>-1) {
-              depth=factor*100+idx
-              answer = true
-              console.log( folders[0] + " " + depth + " " + noteWithPath )
-            }
-          })
-        }
-        if(answer == false) {
-          answer = pathParts.some(part => {
-          depth++
-          return folders.some(folder => {
-            if(0 == part.localeCompare(folder)) {
-              return true
-            }
-          })
-        })
-        }
-        if(answer == true) {
-          if(depthArr.some(d => d > depth)) {
-            answer = false
-          } else {
-            if(depthArr.some(d => depth > d)) {
-              for (let i = 0; i < depthArr.length; i++) { 
-                if(depth > depthArr[i]) {
-                  types_wrong_folder.push(types_f[i])
-                  types_f.splice(i,1)
-                  depthArr.splice(i--,1)
-                }
-              }
-            }
-            types_f.push(key)
-            depthArr.push(depth)
-          }
-        }
-        if(answer == false) {
-          types_wrong_folder.push(key)
-        }
+  /* Templater:applyFunctions
+   */
+  applyFunctions (vals) {
+    for (const [key, value] of Object.entries(vals)) {
+      if (typeof value === 'function') {
+        vals[key] = value(this.#notename, this.#cfgName, this.#cfg,
+          this.#tp, this.#app, this.#cfgComputedValues)
       }
     }
-    function typesFromMarker(me) {
-      let type = undefined;
-      let noMarker  = [];
-      let markerlen = 0;
-      let typelen = 0;
+  }
 
-      for (const [key, value] of me.#typ) {
-        if(value.IGNORE) continue
-        if(types_f.length > 0 && !types_f.includes(key))
-          continue;
-        if(types_wrong_folder.length > 0 && types_wrong_folder.includes(key))
-          continue;
-        let marker = me.#typ.getValue(key+".marker")
-        markerlen = marker === undefined ? 0 : marker.length
-        if(markerlen==0) {
-          noMarker.push(key);
-        } else {
-          if(me.#filetitle.startsWith(marker)) {
-            if(markerlen > typelen) {
-              typelen = markerlen;
-              type = key;
-            }
-          }
-        }
-      }
-      if(type != undefined) {
-        types_m.push(type)
+  /* Templater:doTheWork executes the process logic
+   */
+  async doTheWork () {
+    this.#initialize()
+    try {
+      this.#computeIsNewNote()
+      await this.#findType()
+      await this.#findName()
+      await this.#rename()
+    } catch (e) {
+      if (e instanceof FotyError) {
+        throw e
       } else {
-        types_m = [...noMarker];
+        throw e
       }
     }
-    function defaultTypeName(me) {
-      let defaulttypename = me.#typ.DEFAULT
-      if(defaulttypename == undefined || defaulttypename == "") {
-        for (const [key, value] of me.#typ) {
-          if(value.IGNORE) continue
-          defaulttypename = key
+  }
+
+  /** Templater.computeIsNewNote Checks, whether current file starts with Untitled in current language
+   */
+  #computeIsNewNote () {
+    const untitle = this.#loc.valueOf(
+      'TITLE_NEW_FILE', this.#obsidianLanguage, UNNAMED_FILE
+    )
+    this.#isNewNote = this.#fileTitle.startsWith(untitle)
+  }
+
+  /** Templater.findType setzt this.#cfgName und this.#cfg
+   */
+  async #findType () {
+    const [folderTypes, withoutFolderTypes] = this.#_$_typesFromFolder()
+    const markerTypes = this.#isNewNote
+      ? []
+      : this.#_$_typesFromMarker(folderTypes, withoutFolderTypes)
+    const types = markerTypes.length ? markerTypes : folderTypes
+    // const types = markerTypes.length ? markerTypes : [...folderTypes, ...withoutFolderTypes]
+
+    const prompt = this.#loc.valueOf(
+      'TYPE_PROMPT', this.#obsidianLanguage, 'Choose Type'
+    )
+    const maxEntries = this.#dlg.valueOf('TYPE_MAX_ENTRIES', 10)
+    this.#cfgName = this.#_$_defaultTypeName()
+
+    try {
+      if (types.length) {
+        this.#cfgName = types.length === 1
+          ? types[0]
+          : await this.#tp.system.suggester(
+            types, types, true, prompt, maxEntries
+          )
+      }
+    } catch (e) {
+      throw new DialogError('"Choose Type" Dialog cancelled')
+    }
+    this.#cfg = this.#typ.at(this.#cfgName)
+  }
+
+  /** Templater.findName setzt this.#notename und this.#cfgComputedValues
+   */
+  async #findName () {
+    this.#notename = ''
+    let breadcrumbs = this.#cfgName + '.'
+    breadcrumbs += this.#isNewNote
+      ? 'title_date_function'
+      : 'marker'
+    const value = this.#typ.valueOf(breadcrumbs, '')
+    this.#cfgComputedValues = {}
+    this.#notename = typeof value === 'function'
+      ? await value(this.#notename, this.#cfgName, this.#cfg,
+        this.#tp, this.#app, this.#cfgComputedValues)
+      : this.#isNewNote
+        ? ''
+        : this.#fileTitle.startsWith(value)
+          ? this.#fileTitle.slice(value.length)
+          : this.#fileTitle
+    while (!this.#notename.length) {
+      const defprompt = this.#loc.valueOf(
+        'NAME_PROMPT', this.#obsidianLanguage, 'Pure Name of Note'
+      )
+      breadcrumbs = this.#cfgName + '.name_prompt'
+      const prompt = this.#typ.valueOf(breadcrumbs, undefined) ?? defprompt
+      try {
+        this.#notename = await this.#tp.system.prompt(prompt, '', true)
+      } catch (e) {
+        throw new DialogError('Choose Notename Dialog cancelled')
+      }
+    }
+  }
+
+  /** Templater.rename benennt die Obisidan note um
+   */
+  async #rename () {
+    try {
+      let path = this.#tp.file.path(true)
+      path = path.slice(0, path.lastIndexOf('/'))
+      if (path.length) path += '/'
+      let breadcrumbs = this.#cfgName + '.' + 'marker'
+      const marker = this.#typ.valueOf(breadcrumbs, '')
+      breadcrumbs = this.#cfgName + '.' + 'name_end'
+      const nameend = this.#typ.valueOf(breadcrumbs, '')
+      breadcrumbs = this.#cfgName + '.' + 'create_same_named_file'
+      const createDupl = this.#typ.valueOf(breadcrumbs, false)
+      let newname = marker + this.#notename + nameend
+      if (createDupl) {
+        let num = 0
+        while (await this.#tp.file.exists(path + newname + '.md')) {
+          newname = marker + this.#notename + nameend + ++num
+        }
+      }
+      await this.#tp.file.rename(newname)
+    } catch (e) {
+      this.#tp.system.prompt('Renaming not possible or supported',
+        'ABORT\n        Renaming not possible or supported in this folder\n        Press ESCAPE or any key',
+        false,
+        true)
+      throw new DialogError('Renaming not possible or supported')
+    }
+  }
+
+  #_$_typesFromFolder () {
+    const ALLFOLDERS = -1
+    const types = {
+      goodTypes: [],
+      allFolderTypes: [],
+      addType: function (type, weight) {
+        if (weight === ALLFOLDERS) {
+          this.allFolderTypes.push(type)
+        } else if (this._$_goodWeights.some(d => d > weight)) {
+          ;
+        } else {
+          for (let idx = this.goodTypes.length - 1; idx >= 0; idx--) {
+            if (weight > this._$_goodWeights[idx]) {
+              this._$_remove(idx)
+            }
+          }
+          this._$_add(type, weight)
+        }
+      },
+      _$_goodWeights: [],
+      _$_add: function (type, weight) {
+        this.goodTypes.push(type)
+        this._$_goodWeights.push(weight)
+      },
+      _$_remove: function (idx) {
+        this.goodTypes.splice(idx, 1)
+        this._$_goodWeights.splice(idx, 1)
+      }
+    }
+    const path = this.#tp.file.path(true)
+    for (const entry of this.#typ) {
+      if (!entry.path) {
+        continue
+      }
+      let folders = this.#typ.valueOf(entry.key + '.folders')
+      if (!folders) {
+        types.addType(entry.key, ALLFOLDERS)
+        continue
+      }
+      if (!Array.isArray(folders)) folders = [folders.toString()]
+      let found = false
+      let weight = 0
+      folders.forEach(folder => {
+        const idx = path.indexOf(folder)
+        if (idx > -1) {
+          let pw = path.slice(0, idx).split('/').length
+          pw += (folder.split('/').length - 1) * PATH_FACTOR
+          weight = pw > weight ? pw : weight
+          found = true
+        }
+      })
+      if (found) {
+        types.addType(entry.key, weight)
+      }
+    }
+    return [types.goodTypes, types.allFolderTypes]
+  }
+
+  #_$_typesFromMarker (folderTypes, withoutFolderTypes) {
+    const markerTypes = []
+    const noMarker = []
+    // const types = [...folderTypes, ...withoutFolderTypes]
+    const types = folderTypes.length ? folderTypes : withoutFolderTypes
+    for (const entry of this.#typ) {
+      if (!types.includes(entry.key)) continue
+      const marker = this.#typ.valueOf(entry.key + '.marker', '')
+      if (marker.length) {
+        if (this.#fileTitle.startsWith(marker)) {
+          markerTypes.push(entry.key)
+        }
+      } else {
+        noMarker.push(entry.key)
+      }
+    }
+    return markerTypes.length ? markerTypes : noMarker
+  }
+
+  #_$_defaultTypeName () {
+    let defName = this.#typ['DEFAULT']
+    if (defName === undefined || defName === '' || !this.#typ.at(defName)) {
+      for (const entry of this.#typ) {
+        defName = entry.key
+        if (typeof this.#typ.at(defName) === 'object') {
           break
         }
       }
-      if(defaulttypename == undefined) {
-        defaulttypename = "note"
-      }
-      return defaulttypename
     }
-    let defaulttypename = defaultTypeName(this)
-    typesFromFolder(this)
-    if(!this.#isNew) {
-      typesFromMarker(this)
+    if (defName === undefined || defName === '') {
+      defName = 'note'
     }
-    let type_prompt = this.#loc.getValue("TYPE_PROMPT", "Choose Type")
-    if(type_prompt == undefined) type_prompt = "Choose Type"
-    let type_max_entries = this.#dlg.getValue("TYPE_MAX_ENTRIES", 10)
-    try {
-      if(types_m.length > 1) {
-        this.#cfgname = await this.#tp.system.suggester(types_m,
-          types_m, true, type_prompt, type_max_entries);
-      } else if(types_f.length > 1) {
-        this.#cfgname = await this.#tp.system.suggester(types_f,
-          types_f, true, type_prompt, type_max_entries);
-      } else {
-        this.#cfgname = types_m.length > 0 ? types_m[0] :
-          types_f.length > 0 ? types_f[0] : defaulttypename
-      }
-    } catch(e) {
-      throw new DialogError("Choose Value Dialog cancelled")
-    }
-    this.#cfg = this.#typ.at(this.#cfgname)
-    if(this.#cfg == undefined) this.#cfg = this.#typ
+    return defName
   }
-  async #findName(){
-    this.#notename = ""
-    if(!this.#isNew) {
-      let marker = this.#cfg.getValue("marker", "")
-      if(marker != undefined) 
-        if(this.#filetitle.startsWith(marker))
-          this.#notename = this.#filetitle.substring(marker.length)
-        else
-          this.#notename = this.#filetitle
-      else
-        this.#notename = this.#filetitle
-    } else {
-      let fu = this.#cfg.getValue("title_date_function", undefined)
-      if(typeof fu == "function") {
-        this.#notename = await fu(this.#notename, this.#cfgname, this.#cfg,
-                                  this.#tp, this.#app, this.#cfgComputedValues)
-      }
-    }
-    if(this.#notename == "") {
-      let defprompt = this.#loc.getValue("NAME_PROMPT", "Pure Name of Note")
-      if(defprompt == undefined) defprompt = "Pure Name of Note"
-      let prompt = this.#cfg.getValue("name_prompt")
-      if(prompt == undefined || prompt.length==0) {
-        prompt = defprompt
-      }
-      try {
-        this.#notename= await this.#tp.system.prompt(prompt,"",true)
-      } catch(e) {
-        throw new DialogError("Choose Notename Dialog cancelled");
-      }
-    }
-  }
-  async #rename(){
-    function purepath (value) {
-      let delimiter = "/"
-      let substrings = value.split(delimiter)
-      if(substrings.length < 2) {
-        delimiter ="\\"
-        substrings = value.split(delimiter)
-      }
-      return substrings.length === 1
-        ? ""
-        : substrings.slice(0,-1).join(delimiter)+delimiter
-    }
+}
 
-    try {
-      if(this.#notename.length > 0) {
-        let marker = this.#cfg.getValue("marker", "")
-        if(marker == undefined) marker = ""
-        let name_end = this.#cfg.getValue("name_end", "")
-        if(name_end == undefined) name_end = ""
-        let newname = marker + this.#notename + name_end
-        let path = purepath(this.#tp.file.path(true))
-        let purenewname = String(newname)
-        let num=0
-        if(await this.#tp.file.exists(path+newname+".md")) {
-          let create_dupl = this.#cfg.getValue("create_same_named_file", false)
-          if(create_dupl == undefined) create_dupl = false
-          if(create_dupl == true) {
-            while(await this.#tp.file.exists(path+newname+".md")) {
-              newname = purenewname + " " + ++num
-            }
-          }
-        }
-        await(this.#tp.file.rename(newname))
-      }
-    } catch(e) {
-      this.#tp.system.prompt("Renaming not possible or supported",
-        "ABORT\n\
-        Renaming not possible or supported in this folder\n\
-        Press ESCAPE or any key",false,true)
-      throw new DialogError("Renaming not possible or supported");
+let userConfiguration
+const exampleLiteral1 = {
+  // If prototype is not set to configuration here in this literal
+  // the code will not work
+  __proto__: configuration,
+  SECTION_TRANSLATE: {
+    TITLE_NEW_FILE: {
+      VALUE: [
+        ['en', 'Untitled'],
+        ['de', 'Unbenannt'],
+      ],
+    },
+  },
+  SECTION_NOTETYPES: {
+    // If prototype is not set to section in this literal using __proto__
+    // it will be set during runtime (for known section names)
+    // by calling Object.setPrototypeOf()
+    // This is slow in current engines and may introduce strange behaviour
+    __proto__: section,
+    note: {
+      marker: { VALUE: '{w}', },
+      aliases: { VALUE: cbkAliasOrt, RENDER: false, },
+      borgia: { VALUE: 'Lucrezia ', RENDER: false, },
+      firstline: { VALUE: 'DAS WORT', RENDER: true, },
+      fugger: { VALUE: true, RENDER: true, },
+    },
+  },
+}
+userConfiguration = exampleLiteral1
+const exampleLiteral2 = {
+  __proto__: configuration,
+  SECTION_TRANSLATE: {
+    __proto__: section,
+    TITLE_NEW_FILE: { VALUE: 'Unbenannt', },
+  },
+  SECTION_NOTETYPES: {
+    __proto__: section,
+    fueralle: {
+      REPEAT: true,
+      aliases: { RENDER: false, VALUE: cbkAliasOrt, TYPE: '(Array.<String>|Function)', },
+      borgia: { RENDER: false, VALUE: 'Lucrezia', TYPE: 'String', },
+      firstline: { RENDER: true, VALUE: 'DAS WORT', TYPE: 'String', },
+      fugger: { RENDER: true, VALUE: true, TYPE: 'Boolean', },
+    },
+    alt: {
+      folders: { VALUE: ['alt', 'antik'], },
+      lastline: { RENDER: true, VALUE: 'ALT', },
+      type: { RENDER: true, VALUE: 'alt' },
+    },
+    note: {
+      marker: { VALUE: '{w}', },
+      folders: { VALUE: ['temp'], },
+      type: { RENDER: true, VALUE: 'note', },
     }
   }
 }
-//#endregion Templater
-/** exported function.
- *
- * Name does not matter for templater, but if named 'main' interferes with jsdoc.
- * @param {Object} tp - templater object
- * @param {Object} app - obsidian api object
- * @returns {Object}
- */
-async function foty(tp, app) {
-  let checkErrorOutputYAML = {}
-  let testYAML = {}
-  let frontmatterYAML = {}
-  let renderYAML = {____: ""}
-  let dbgYAML = {}
-  if (CHECK_ERROR_OUTPUT) {
-    letAllThrow(checkErrorOutputYAML)
-    return checkErrorOutputYAML
-  }
-  test(testYAML)
-  try {
-    let lit = user_configuration
-    let setting = new Setting(lit, undefined, undefined)
-    let templ = new Templater(setting, tp, app)
-    await templ.doTheWork()
-    let notetype = templ.notetype
-    let noteCfg = setting.at("SECTION_NOTETYPES."+notetype)
-    //setting.showWhatGoesOut(0)
-    //noteCfg.showWhatGoesOut(0)
-    //noteCfg.showVALUES(0)
+userConfiguration = exampleLiteral2
+const exampleLiteral3 = {
+}
+userConfiguration = exampleLiteral3
+const schuleLiteral = {
+  __proto__: configuration,
+  SECTION_TRANSLATE: {
+    __proto__: section,
+    TITLE_NEW_FILE: {
+      VALUE: [
+        ['en', 'Untitled'],
+        ['de', 'Unbenannt'],
+      ],
+    },
+  },
+  SECTION_NOTETYPES: {
+    __proto__: section,
+    DEFAULT: 'note',
+    defaults: {
+      REPEAT: true,
+      mocstring: { VALUE: '-', TYPE: 'String', },
+      cssclasses: { RENDER: false, VALUE: cbkFmtCssClasses, TYPE: '(Array.<String>|Function)', },
+      date_created: { RENDER: false, VALUE: cbkFmtNow, TYPE: '(Date|Function)', },
+      author: { RENDER: false, VALUE: 'Ueberphilosophy', TYPE: 'String', },
+      publish: { RENDER: false, VALUE: true, TYPE: 'Boolean', },
+      tags: { RENDER: false, VALUE: '[]', TYPE: '(String|Array.<String>|Function)', },
+      prevlink: { RENDER: true, VALUE: '', TYPE: '(String|Function)', },
+      nextlink: { RENDER: true, VALUE: '', TYPE: '(String|Function)', },
+      scriptline: { RENDER: true, VALUE: '', TYPE: '(String|Function)', },
+      firstline: { RENDER: true, VALUE: cbkNoteName, TYPE: '(String|Function)', },
+      sndline: { RENDER: true, VALUE: '', TYPE: '(String|Function)', },
+      thrdline: { RENDER: true, VALUE: '', TYPE: '(String|Function)', },
+      lastline: { RENDER: true, VALUE: cbkFmtLastLine, TYPE: '(String|Function)', },
+    },
+    note: {},
+    diary: {
+      folders: { VALUE: ['Diary'], },
+      title_date_function: { VALUE: cbkCalcDateTitle, },
+      title_date_format: { VALUE: 'YYYY-MM-DD', },
+      publish: { VALUE: false, },
+      prevlink: { VALUE: cbkPrevDateLink, },
+      nextlink: { VALUE: cbkNextDateLink, },
+      sndline: { VALUE: '## ', },
+    },
+    material: {
+      folders: { VALUE: ['Materialien'], },
+      name_prompt: { VALUE: 'Titel_der_Vorlesung_Jahr_Institut_Speaker', },
+      cssclasses: { VALUE: cbkMaterialCssClasses, },
+      date_created: { VALUE: cbkMaterialDateCreated, },
+      author: { VALUE: cbkMaterialAuthor, },
+      publish: { VALUE: cbkMaterialPublish, },
+      tags: { VALUE: cbkMaterialTags, },
+      ddckey: { RENDER: false, VALUE: cbkMaterialDdcKey, },
+      media: { RENDER: false, VALUE: cbkMaterialMedia, },
+      scriptline: { VALUE: '```dataviewjs\ndv.executeJs(await dv.io.load("Materialien/breadcrumbs.js"));\n```', },
+      sndline: { VALUE: cbkMaterialSndLine, },
+      thrdline: { VALUE: cbkMaterialThrdLine, },
+      fourthline: { RENDER: true, VALUE: cbkMaterialFourthLine, },
+      fifthline: { RENDER: true, VALUE: cbkMaterialFifthLine, },
+      lastline: { VALUE: cbkMaterialLastLine, },
+    },
+    autor: {
+      folders: { VALUE: ['Autoren'], },
+      name_prompt: { VALUE: 'Autornachname', },
+      name_end: { VALUE: ' Quellen', },
+      gndkey: { RENDER: false, VALUE: '', TYPE: 'Number', },
+      gndlink: { RENDER: false, VALUE: '', TYPE: 'String', },
+      tags: { VALUE: cbkAutorTag, },
+      scriptline: { VALUE: '```dataviewjs\ndv.executeJs(await dv.io.load("Materialien/breadcrumbs.js"));\n```\n', },
+      sndline: { VALUE: cbkTimeLine, },
+    },
+    autorsek: {
+      folders: { VALUE: ['Autoren-Sekundaer'], },
+      name_prompt: { VALUE: 'Autornachname', },
+      name_end: { VALUE: ' Sekundaer', },
+      cssclasses: { VALUE: 'sekundaer', },
+      tags: { VALUE: cbkAutorTag, },
+      scriptline: { VALUE: '```dataviewjs\ndv.executeJs(await dv.io.load("Materialien/breadcrumbs.js"));\n```\n', },
+      firstline: { VALUE: cbkSekundaerName, },
+    },
+    feld: {
+      folders: { VALUE: ['Feld'], },
+      publish: { VALUE: false, },
+      scriptline: { VALUE: cbkScriptLineFeld, },
+      firstline: { VALUE: cbkFrstLineFeld, },
+      sndline: { VALUE: cbkSndLineFeld, },
+      thrdline: { VALUE: cbkThrdLineFeld, },
+      lastline: { VALUE: cbkFmtLastLine, },
+    },
+    stutiis: {
+      folders: { VALUE: ['XXXstutiis'], },
+      date_created: { VALUE: '', },
+      author: { VALUE: '', },
+      cssclasses: { VALUE: 'studies', },
+      publish: { VALUE: false, },
+    },
+    stutiismitschrift: {
+      folders: { VALUE: ['XXXstutiis/Mitschriften'], },
+      marker: { VALUE: '@', },
+      name_prompt: { VALUE: 'Exakter Titel der Veranstaltung: Titel_der_Vorlesung_Jahr_Institut_Speaker', },
+      date_created: { VALUE: '', },
+      author: { VALUE: '', },
+      cssclasses: { VALUE: 'studies', },
+      publish: { VALUE: false, },
+      firstline: { VALUE: 'Mitschrift', },
+      sndline: { VALUE: cbkSndLineMitschrift, },
+      thrdline: { VALUE: '## Offen', },
+    },
+    werkstattmitschrift: {
+      folders: { VALUE: ['Mitschriften'], },
+      marker: { VALUE: '@', },
+      name_prompt: { VALUE: 'Exakter Titel der Veranstaltung: Titel_der_Vorlesung_Jahr_Institut_Speaker', },
+      // /* schule_public */ date_created: { VALUE: '', },
+      // /* schule_public */ author: { VALUE: '', },
+      // /* schule_public */ cssclasses: { VALUE: 'studies', },
+      /* schule_privat */ cssclasses: { VALUE: 'werkstatt', },
+      publish: { VALUE: false, },
+      firstline: { VALUE: 'Mitschrift', },
+      sndline: { VALUE: cbkSndLineMitschrift, },
+      thrdline: { VALUE: '## Offen', },
+    },
+    audio: {
+      folders: { VALUE: ['Werkstatt'], },
+      marker: { VALUE: '{a}', },
+      name_prompt: { VALUE: 'OPTIONAL Podcast ODER Reihe - Autornachname - Audiotitel', },
+    },
+    buch: {
+      folders: { VALUE: ['Werkstatt'], },
+      marker: { VALUE: '{b}', },
+      name_prompt: { VALUE: 'Autornachname - Buchtitel', },
+      title_date_function: { VALUE: cbkAskGoogleForTitle, },
+      tags: { VALUE: cbkBookAliasAsTag, },
+      aliases: { RENDER: false, VALUE: cbkBookAlias, },
+      buchtitel: { RENDER: false, VALUE: cbkBuchTitel, },
+      buchuntertitel: { RENDER: false, VALUE: cbkBuchUntertitel, },
+      buchautor: { RENDER: false, VALUE: cbkBuchAutor, },
+      buchautorv: { RENDER: false, VALUE: cbkBuchAutorv, },
+      buchdatum: { RENDER: false, VALUE: cbkBuchDatum, },
+      buchverlag: { RENDER: false, VALUE: cbkBuchVerlag, },
+      buchseiten: { RENDER: false, VALUE: cbkBuchSeiten, },
+      buchsprache: { RENDER: false, VALUE: cbkBuchSprache, },
+      buchisbn: { RENDER: false, VALUE: cbkBuchIsbn, },
+      buchisbn13: { RENDER: false, VALUE: cbkBuchIsbn13, },
+      buchebook: { RENDER: false, VALUE: cbkBuchEbook, },
+      buchstatus: { RENDER: false, VALUE: ['egal'], },
+      xbuchstatus: { RENDER: false, VALUE: ['gelesen', 'aktuell', 'teilweise', 'nochmal', 'ungelesen'], },
+    },
+    exzerpt: {
+      folders: { VALUE: ['Werkstatt'], },
+      marker: { VALUE: '$', },
+      name_prompt: { VALUE: 'Autornachname - Buchtitel', },
+    },
+    ort: {
+      folders: ['Werkstatt'],
+      marker: '&',
+      name_prompt: 'Ortsname, Land',
+      aliases: { VALUE: cbkFmtOneAlias, },
+      gndkey: { RENDER: false, VALUE: '', TYPE: 'Number', },
+      gndlink: { RENDER: false, VALUE: '', TYPE: 'String', },
+    },
+    person: {
+      folders: { VALUE: ['Werkstatt'], },
+      marker: { VALUE: '=', },
+      name_prompt: { VALUE: 'Personnachname, Personvorname OPTIONAL , Geburtsdatum', },
+      aliases: { VALUE: cbkFmtOneAliasSwitch, },
+      gndkey: { RENDER: false, VALUE: '', TYPE: 'Number', },
+      gndlink: { RENDER: false, VALUE: '', TYPE: 'String', },
+      pict: { RENDER: true, VALUE: 'teacher-295387_640-pixabay_2026-01-07.png', },
+      pict_width: { RENDER: true, VALUE: 100, },
+      firstline: { VALUE: cbkHeaderPerson, },
+    },
+    randnotizen: {
+      folders: { VALUE: ['Werkstatt', 'Buchmitschriften'], },
+      marker: { VALUE: '@', },
+      name_prompt: { VALUE: 'Autornachname - Buchtitel', },
+    },
+    video: {
+      folders: { VALUE: ['Werkstatt'], },
+      marker: { VALUE: '{v}', },
+      name_prompt: { VALUE: 'OPTIONAL Reihe - OPTIONAL Autornachname - Videotitel', },
+    },
+    web: {
+      folders: { VALUE: ['Werkstatt'], },
+      marker: { VALUE: '{w}', },
+      name_prompt: { VALUE: 'OPTIONAL Autor - Webseitentitel - OPTIONAL Datum', },
+    },
+    zitat: {
+      folders: { VALUE: ['Werkstatt'], },
+      marker: { VALUE: '°', },
+      name_prompt: { VALUE: 'Titel Autornachname', },
+    },
+    zitate: {
+      folders: { VALUE: ['Werkstatt'], },
+      marker: { VALUE: '°°', },
+      name_prompt: { VALUE: 'Titel Autornachname', },
+    },
+  },
+}
+userConfiguration = schuleLiteral
+// userConfiguration = exampleLiteral1
 
-    frontmatterYAML = setting.getFrontmatterYAML()
-    if(noteCfg != undefined)
-      Object.assign(frontmatterYAML, noteCfg.getFrontmatterYAML())
-    if(noteCfg != undefined)
-      Object.assign(renderYAML, setting.getRenderYAML(), noteCfg.getRenderYAML())
+/**
+ * @alias module:foty.foty
+ */
+async function foty(tp, app, testConfiguration) { // eslint-disable-line
+  let frontmatterYAML = null
+  let renderYAML = null
+  frontmatterYAML = {}
+  renderYAML = {
+    ____: ''
+  }
+  try {
+    const templ = testConfiguration
+      ? new Templater(testConfiguration, tp, app)
+      : new Templater(userConfiguration, tp, app)
+    await templ.doTheWork()
+    const notetype = templ.notetype
+    const typ = userConfiguration._$_section('SECTION_NOTETYPES')
+    Object.assign(frontmatterYAML, typ.getFrontmatterYAML(notetype))
+    Object.assign(renderYAML, typ.getRenderYAML(notetype))
     templ.applyFunctions(frontmatterYAML)
     templ.applyFunctions(renderYAML)
   } catch (e) {
     if (e instanceof FotyError) {
-      let errYAML = {}
-      e.errOut(errYAML)
-      return errYAML
-    } else if( e instanceof DialogError) {
-      return {CANCELLED: true}
+      throw e
+    } else if (e instanceof DialogError) {
+      return {
+        CANCELLED: true
+      }
     } else {
-      aut("RETHROWING")
       throw e
     }
   }
-
-  dbgYAML = {
-    __notePath: tp.file.path(true /*relative*/),
-    //For some FileNames there is a YAMLParserError if no string before
-    __noteTitle: "is    "+tp.file.title,
-    __activeFile: tp.config.active_file.path,
-    /* 1-create with alt-e
-     * 2-create from link or create with ctrl-n
-     */
-    __runMode: tp.config.run_mode,
-    __targetFile: tp.config.target_file.path,
-    __templateFile: tp.config.template_file.path,
-    __frontmatter: flatten(tp.frontmatter),
-  }
-
-  if (!DEBUG) dbgYAML = undefined
-  return Object.assign({}, frontmatterYAML, dbgYAML, testYAML, renderYAML)
+  return Object.assign({}, frontmatterYAML, renderYAML)
 }
 
+/* eslint-disable */
+/* // BEGIN PRODUCTION minus
+  const moment = require('moment')
+  const tp = {
+    date: {
+      now: function (formatstr) {
+        const format = formatstr ?? 'YYYY-MM-DD'
+        return moment().format(format)
+      }
+    },
+    file: {
+      title: 'Untitled',
+      path: function () { return 'dir1/Buecher/subdir/filename.md' },
+      exists: async function () { return Promise.resolve(false) },
+      rename: async function () { return Promise.resolve(true) },
+    },
+    system: {
+      suggester: async function (li) { return Promise.resolve(li[1]) },
+      prompt: async function () { return Promise.resolve('NewNoteName') },
+    }
+  }
+  const app = {
+    workspace: {
+      getActiveFile: function () { },
+    },
+    vault: {
+      getAbstractFileBypath: function () { },
+    },
+    fileManager: {
+      generateMarkdownLink: function () { },
+    },
+  }
+  foty(tp, app)
+
+  module.exports = {
+    AccessError,
+    LiteralError,
+    InitializationError,
+    FotyError,
+    cbkAliasOrt,
+    cbkFmtCssClasses,
+    cbkFmtLastLine,
+    cbkFmtNow,
+    cbkNoteName,
+    cbkSndLineMitschrift,
+    configuration,
+    SECTION_GENERAL,
+    SECTION_TRANSLATE,
+    SECTION_DIALOG,
+    SECTION_NOTETYPES,
+    section,
+    specializations,
+    Templater,
+    foty,
+    schuleLiteral,
+    tp,
+    app,
+  }
+*/ // END PRODUCTION minus

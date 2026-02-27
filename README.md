@@ -1,3 +1,7 @@
+---
+aliases: []
+tags: []
+---
 #   Lernmaterialen online
 
 Sammlung frei verfügbarer Lernmaterialien, eimal Links auf Vorlesungen und hochwertige Podcasts und zum anderen Links auf gemeinfreie Originaltexte. Die Sammlung wird von [github.io](https://monikalobinger.github.io/home.html) gehostet. Die [Obsidian Quellen](https://github.com/MonikaLobinger/Nonmatrikulation) sind ein vollständiger Obsidian Vault.

@@ -88,8 +88,8 @@ if [ $1 = "domakepub" ]; then
   #
   #
   # Entferne aus dem Dateibaum nicht anzuzeigende Dateien
-  # plan, show_diagrams, show_export, show_formats show_greek, show_hotkeys show_links , # show_styles
-  declare -a md=( "plan" "show_diagrams" "show_export" "show_formats" "show_greek" "show_hotkeys" "show_links") # "show_styles"
+  # plan, show_commands, show_diagrams, show_export, show_formats show_greek, show_hotkeys show_links , show_projects  # show_styles
+  declare -a md=( "plan" "show_commands" "show_diagrams" "show_export" "show_formats" "show_greek" "show_hotkeys" "show_links" "show_projects") # "show_styles"
   for i in "${md[@]}"; do
      sed -i 's/<div class="tree-item is-collapsed nav-file" data-depth="1"><a class="tree-item-self is-clickable nav-file-title" href="'"$i"'.html" data-path="'"$i"'.md"><div class="tree-item-inner nav-file-title-content">'"$i"'<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div>//' site-lib/html/file-tree-content.html
   done
@@ -106,9 +106,11 @@ if [ $1 = "domakepub" ]; then
   #
   #
   # Entferne aus dem Dateibaum nicht anzuzeigende Verzeichnisse
-  # ZZZZZZ2/
-  # allhelperfiles/allresources/private/
+  # ZZZZZZ2/ mit zzzzzz2
+  # Zzrojekte/ mit zzzzzz4
+  # allhelperfiles/allresources/private/ mit zzzzzz3
   sed -i 's/<div class="tree-item mod-collapsible is-collapsed nav-folder" data-depth="1"><div class="tree-item-self is-clickable mod-collapsible nav-folder-title" data-path="ZZZZZZ2">.*<div class="tree-item is-collapsed nav-file" data-depth="2"><a class="tree-item-self is-clickable nav-file-title" href="zzzzzz2\/zzzzzz2.html" data-path="ZZZZZZ2\/zzzzzz2.md"><div class="tree-item-inner nav-file-title-content">zzzzzz2<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div><\/div><\/div>//' site-lib/html/file-tree-content.html
+  sed -i 's/<div class="tree-item mod-collapsible is-collapsed nav-folder" data-depth="1"><div class="tree-item-self is-clickable mod-collapsible nav-folder-title" data-path="Zzrojekte">.*<div class="tree-item is-collapsed nav-file" data-depth="2"><a class="tree-item-self is-clickable nav-file-title" href="zzzzzz4\/zzzzzz4.html" data-path="Zzrojekte\/zzzzzz4.md"><div class="tree-item-inner nav-file-title-content">zzzzzz4<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div><\/div><\/div>//' site-lib/html/file-tree-content.html
   sed -i 's/<div class="tree-item mod-collapsible is-collapsed nav-folder" data-depth="3"><div class="tree-item-self is-clickable mod-collapsible nav-folder-title" data-path="allhelperfiles\/allresources\/private">.*<div class="tree-item-inner nav-file-title-content">zzzzzz3<\/div><div class="nav-file-tag">gif<\/div><\/a><div class="tree-item-children nav-file-children"><\/div><\/div><\/div><\/div>//' site-lib/html/file-tree-content.html
   echo "Für Public überflüssige Verzeichnisse aus dem Dateibaum gelöscht"
   #

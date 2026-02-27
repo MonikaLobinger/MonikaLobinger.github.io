@@ -1,0 +1,187 @@
+<style>
+  p.my{
+    background-image: url('data:image/svg+xml,<svg height="20" width="300" fill="gainsboro" xmlns="http://www.w3.org/2000/svg"><text x="10" y="15" >S A M M L U N G</text></svg>');
+    color: grey;
+    background-color: #117964;
+    margin: 0;
+    padding: 0;
+    height: 20px;
+    xfill:"%23F6F6F6";
+  }
+  .button-container {
+    padding-bottom: 0px !important;
+    margin-left: auto;
+    margin-right: auto;
+    width: 100% !important;
+    max-width: min(60em, calc(100vw - 5em)) !important;
+    xbackground: lightyellow;
+    margin-top: -0.7em !important;
+  }
+  .frontmatter-button {
+    height: 1.2rem;
+    float:right;
+    xcolor:var(--background-primary-alt) !important;
+    cursor: pointer;
+    border: 1px solid;
+  }
+  .theme-light {
+    .frontmatter-button {
+      color:grey !important;
+    }
+    .frontmatter-button-is-on {
+      border-color: lightsalmon !important;
+    }
+    .frontmatter-button-is-off {
+      border-color: lightblue !important;
+    }
+  }
+  .theme-dark{
+    .frontmatter-button {
+      color:lightgrey !important;
+    }
+    .frontmatter-button-is-on {
+      border-color: darkred!important;
+    }
+    .frontmatter-button-is-off {
+      border-color: slateblue !important;
+    }
+  }
+  :root {
+    --frontmatter-display: none;
+  }
+  pre.frontmatter {
+    display: var(--frontmatter-display) !important;
+    width: 100% !important;
+    min-height: initial !important;
+    overflow: visible !important;
+    background: initial !important;
+  }
+</style>
+<script>
+function addFrontmatterButton() {
+  //console.log("ADDFRONTMATTERBUTTON")
+  const centerDiv = document.getElementById('center-content').getElementsByClassName("obsidian-document")[0];
+  //const centerDiv = document.getElementById('center-content').firstElementChild;
+
+  const container = document.createElement('div');
+  container.classList.add("markdown-preview-sizer");
+  container.classList.add("button-container");
+
+  const button = document.createElement('button');
+  button.innerText="YAML";
+  button.title="Schaltet die Anzeige der Frontmatter Einträge um.";
+  button.classList.add("frontmatter-button");
+  button.classList.add("frontmatter-button-is-off");
+
+  container.appendChild(button);
+  //console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+  const frontmatterSection = centerDiv.children[1];
+  centerDiv.insertBefore(container,frontmatterSection);
+
+  button.addEventListener("click", (e) => {
+    if(e.currentTarget.classList.contains('frontmatter-button-is-off')) {
+      e.currentTarget.classList.remove('frontmatter-button-is-off');
+      e.currentTarget.classList.add('frontmatter-button-is-on');
+      document.documentElement.style.setProperty('--frontmatter-display', 'initial');
+    } else {
+      e.currentTarget.classList.remove('frontmatter-button-is-on');
+      e.currentTarget.classList.add('frontmatter-button-is-off');
+      document.documentElement.style.setProperty('--frontmatter-display', 'none');
+    }
+  });
+}
+if (document.readyState === 'loading') {
+    //console.log("LOADING")
+    document.addEventListener('DOMContentLoaded', function() {
+        addFrontmatterButton();
+    });
+} else {
+    //console.log("READY")
+    addFrontmatterButton();
+}
+</script>
+<p class="my"></p>
+
+
+
+
+<style>
+  .unused-snippets {
+    .frontmatter-toggle-container {
+      background: red;
+    }
+    .frontmatter-toggle-input {
+      background: blue;
+    }
+    .frontmatter-toggle-input:checked~.toggle-background::before {
+      animation: toggle-slide-right ease-in-out normal both;
+      animation-duration: inherit;
+    }
+    .frontmatter-toggle-input:checked~.toggle-background::after {
+      transform: translateX(calc(var(--handle-translation) * -1)) scale(0.9);
+      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>') no-repeat center center;
+    }
+    .toggle-frontmatter {
+      position: relative;
+      width: var(--toggle-width);
+      height: var(--toggle-height);
+      border-radius: var(--border-radius);
+      background-color: var(--background-modifier-border);
+      transition: background-color var(--color-fade-speed);
+      z-index: 1000;
+      animation-duration: .2s;
+    }
+    .toggle-frontmatter::before {
+      content: "";
+      position: absolute;
+      left: var(--handle-margin);
+      top: var(--handle-margin);
+      height: var(--handle-width);
+      width: var(--handle-width);
+      border-radius: var(--handle-radius);
+      background-color: var(--text-normal);
+      box-shadow: inset 0 1px 1px  rgba(0, 0, 0, .2);
+      animation: toggle-slide-left ease-in-out normal both;
+      animation-duration: inherit;
+      z-index: 1000;
+    }
+    .toggle-frontmatter::after {
+      content: "";
+      position: absolute;
+      left: var(--handle-margin);
+      top: var(--handle-margin);
+      height: var(--handle-width);
+      width: var(--handle-width);
+      transition: transform .3s;
+      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-moon"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>') no-repeat center center;
+      transform: scale(.9);
+    }
+  }
+</style>
+<script>
+  /*UNUSED
+    const containerDiv = document.getElementById('right-content').getElementsByClassName("topbar-content")[0];
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = 'toggle-frontmatter-input';
+    checkbox.classList.add("frontmatter-toggle-input");
+    checkbox.classList.add("theme-toggle-input");
+
+    const label = document.createElement('label');
+    label.htmlFor = 'toggle-frontmatter-input';
+    label.classList.add("frontmatter-toggle-container");
+    label.classList.add("theme-toggle-container");
+
+    const values = document.createElement('div');
+    values.classList.add("toggle-frontmatter");
+
+    containerDiv.appendChild(label);
+    label.appendChild(checkbox);
+    label.appendChild(values);
+
+    checkbox.onclick = () => {
+      alert("HUHU");
+    }
+  */
+</script>

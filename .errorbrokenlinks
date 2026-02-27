@@ -2,7 +2,7 @@
 echo "Das checkt die Links in der veröffentlichten Seite auf github"
 read -p "Weitermachen? [J/n] " -n 1 -r
 echo
-if [[ ! $REPLY =~ ^[Jj]$ ]]; then
+if [[ -n $REPLY ]] && [[ ! $REPLY =~ ^[Jj]$ ]]; then
     echo "also nicht"
     exit 1
 fi
